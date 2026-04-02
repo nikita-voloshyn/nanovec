@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git:*)",
+      "Bash(gh:*)",
+      "Bash(cargo:*)",
+      "Bash(rustup:*)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(secrets/**)",
+      "Read(~/.ssh/**)",
+      "Write(.env)",
+      "Write(.env.*)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "description": "Auto-lint Rust files after edits with cargo clippy",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case \"$CLAUDE_FILE_PATH\" in *.rs) cargo clippy --quiet 2>/dev/null || true ;; esac"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "description": "Scan for unsafe blocks without SAFETY comments and TODO/FIXME markers",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '--- Unsafe blocks without // SAFETY: ---' && grep -rn 'unsafe' src/ --include='*.rs' 2>/dev/null | grep -v '// SAFETY:' | grep -v '#\\[cfg' | grep -v 'unsafe_code' | head -20; echo '--- TODO/FIXME/HACK/XXX markers ---' && grep -rn 'TODO\\|FIXME\\|HACK\\|XXX' src/ --include='*.rs' 2>/dev/null | head -20; echo '[NanoVec] Review any matches above' || true"
+          }
+        ]
+      },
+      {
+        "description": "Scan for hardcoded secrets before session ends",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "grep -rn 'API_KEY\\|SECRET\\|PASSWORD\\|PRIVATE_KEY\\|Bearer ' --include='*.rs' --include='*.toml' --include='*.yml' --include='*.yaml' . 2>/dev/null | grep -v target | grep -v '.env.example' | head -20 && echo '[NanoVec] Review any matches above for hardcoded secrets' || true"
+          }
+        ]
+      }
+    ]
+  }
+}

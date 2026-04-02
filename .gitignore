@@ -1,0 +1,29 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment and secrets
+.env
+.env.*
+
+# Claude Code personal settings (never commit)
+.claude/settings.local.json
+
+# Criterion benchmark data
+target/criterion/
+
+# Coverage
+*.profraw
+*.profdata
+lcov.info
+tarpaulin-report.html
