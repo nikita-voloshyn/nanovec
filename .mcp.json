@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "nanovec": {
+      "command": "/Users/volosyn.nikita/dev/02_Apps/nanovec/target/release/nanovec"
+    }
+  }
+}
