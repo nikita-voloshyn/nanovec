@@ -103,6 +103,12 @@ impl VectorStore {
         let dim = self.dimension;
         self.vectors.chunks_exact(dim).enumerate()
     }
+
+    /// Remove all vectors. The dimension lock is preserved.
+    pub fn clear(&mut self) {
+        self.vectors.clear();
+        self.count = 0;
+    }
 }
 
 #[cfg(test)]
@@ -206,5 +212,42 @@ mod tests {
         assert_eq!(collected[0], (0, &[1.0, 2.0][..]));
         assert_eq!(collected[1], (1, &[3.0, 4.0][..]));
         assert_eq!(collected[2], (2, &[5.0, 6.0][..]));
+    }
+
+    #[test]
+    fn clear_resets_count() {
+        let mut store = VectorStore::new(2);
+        store.insert(&[1.0, 2.0]).unwrap();
+        store.insert(&[3.0, 4.0]).unwrap();
+        assert_eq!(store.count(), 2);
+        store.clear();
+        assert_eq!(store.count(), 0);
+    }
+
+    #[test]
+    fn clear_preserves_dimension() {
+        let mut store = VectorStore::new(384);
+        store.insert(&vec![0.5; 384]).unwrap();
+        store.clear();
+        assert_eq!(store.dimension(), 384);
+    }
+
+    #[test]
+    fn insert_after_clear_starts_from_zero() {
+        let mut store = VectorStore::new(2);
+        store.insert(&[1.0, 2.0]).unwrap();
+        store.insert(&[3.0, 4.0]).unwrap();
+        store.clear();
+        let off = store.insert(&[7.0, 8.0]).unwrap();
+        assert_eq!(off, 0);
+        assert_eq!(store.get(0), Some(&[7.0_f32, 8.0][..]));
+    }
+
+    #[test]
+    fn clear_on_empty_store_is_noop() {
+        let mut store = VectorStore::new(2);
+        store.clear();
+        assert_eq!(store.count(), 0);
+        assert_eq!(store.dimension(), 2);
     }
 }

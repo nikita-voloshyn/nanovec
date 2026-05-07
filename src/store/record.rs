@@ -73,6 +73,13 @@ impl RecordStore {
     pub fn iter(&self) -> impl Iterator<Item = &VectorRecord> {
         self.records.iter()
     }
+
+    /// Remove all records and reset the ID counter to 0.
+    pub fn clear(&mut self) {
+        self.records.clear();
+        self.id_to_idx.clear();
+        self.next_id = 0;
+    }
 }
 
 impl Default for RecordStore {
@@ -158,5 +165,37 @@ mod tests {
         store.remove(id2);
         let id4 = store.insert("d".to_string(), vec![], 4);
         assert!(id4 > id3);
+    }
+
+    #[test]
+    fn clear_resets_state() {
+        let mut store = RecordStore::new();
+        store.insert("a".to_string(), vec![], 0);
+        store.insert("b".to_string(), vec![], 4);
+        assert_eq!(store.count(), 2);
+        store.clear();
+        assert_eq!(store.count(), 0);
+        assert!(store.get(0).is_none());
+        assert!(store.get(1).is_none());
+    }
+
+    #[test]
+    fn insert_after_clear_starts_id_from_zero() {
+        let mut store = RecordStore::new();
+        store.insert("a".to_string(), vec![], 0);
+        store.insert("b".to_string(), vec![], 4);
+        store.clear();
+        let id = store.insert("c".to_string(), vec![], 0);
+        assert_eq!(id, 0);
+    }
+
+    #[test]
+    fn clear_on_empty_store_is_noop() {
+        let mut store = RecordStore::new();
+        store.clear();
+        assert_eq!(store.count(), 0);
+        // Next ID still starts at 0
+        let id = store.insert("a".to_string(), vec![], 0);
+        assert_eq!(id, 0);
     }
 }
