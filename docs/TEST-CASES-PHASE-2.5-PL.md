@@ -1,16 +1,17 @@
-# Scenariusz testowy Phase 2.5 — test interaktywny po polsku
+# Scenariusz testowy Phase 2.5 — wielojęzyczny korpus ScootGo
 
 ## Cel
 
 Ręcznie zweryfikować nowe narzędzia Phase 2.5 (`clear`, rozszerzony `stats`,
-pola `distance` + `similarity`) na realnym, polskojęzycznym korpusie. Przy
-okazji potwierdzić udokumentowane ograniczenie modelu MiniLM-L6-v2: gorszą
-jakość rankingu dla treści innych niż angielska.
+pola `distance` + `similarity`) na realnym, **wielojęzycznym** korpusie
+[`TEST-CORPUS-MULTILINGUAL.md`](TEST-CORPUS-MULTILINGUAL.md). Korpus zawiera
+fikcyjne FAQ usługi wynajmu hulajnóg ScootGo — 10 tematów × 3 języki
+(angielski, polski, ukraiński) = 30 chunków po jednym akapicie każdy.
 
-Test komplementuje zautomatyzowany `tests/integration/mcp_phase25.rs`, który
-sprawdza tę samą powierzchnię, ale na sztucznych wektorach 384-wymiarowych.
-Tutaj korzystamy z prawdziwych zapytań w języku polskim — żeby zobaczyć, jak
-system zachowuje się w warunkach zbliżonych do produkcji.
+Test idzie dalej niż automatyczny `tests/integration/mcp_phase25.rs` — sprawdza
+**zachowanie modelu osadzającego MiniLM-L6-v2 przy zapytaniach w trzech
+językach**, a przy okazji potwierdza, że wszystkie nowe pola Phase 2.5 są
+spójnie obecne w odpowiedziach `search_document` na realnym ruchu.
 
 ---
 
@@ -21,33 +22,34 @@ system zachowuje się w warunkach zbliżonych do produkcji.
    ```bash
    cargo build --release
    ```
-3. Klient MCP (np. Claude Code) **przeładowany** po podmianie binarki — bez
-   tego serwer nadal serwuje starą poprzednią wersję bez `clear` i ze starym
-   kształtem `stats`. W Claude Code: `/mcp` → odłączyć i podłączyć `nanovec`,
-   albo zrestartować klienta.
-4. Cache HuggingFace (`~/.cache/huggingface/hub/models--sentence-transformers
-   --all-MiniLM-L6-v2/`) zainicjalizowany — pierwszy `embed` po
-   reloadzie zajmie 10–30 s, kolejne ~30 ms.
+3. **Klient MCP przeładowany** po podmianie binarki — bez tego `clear` nie
+   pojawi się w liście narzędzi, a `stats` nadal będzie zwracać stary kształt.
+4. Cache HuggingFace zainicjalizowany (pierwszy `embed` po reloadzie zajmie
+   10–30 s, kolejne ~30 ms).
+
+Dokumenty pomocnicze pod ręką:
+
+- [`TEST-CORPUS-MULTILINGUAL.md`](TEST-CORPUS-MULTILINGUAL.md) — korpus do indeksowania
+- [`components/embed.md`](components/embed.md), sekcja "Model Limitations" — kontekst dla wyników
+- [`components/mcp-server.md`](components/mcp-server.md), sekcja "Score Fields (Phase 2.5)" — definicja pól wyniku
 
 ---
 
 ## Mapa kroków
 
-| # | Akcja | Oczekiwany wynik |
-|---|-------|------------------|
-| 1 | `stats` na pustej bazie | Pełny kształt z polami `default_metric` i `embedder` |
-| 2 | Indeksowanie 7 dokumentów po polsku | ID 0–6, `stats.count == 7` |
-| 3 | Zapytanie po polsku | Top-1 trafia w temat, ale gap do runner-up jest mały |
-| 4 | Te same zapytania po angielsku | Wyraźnie czystszy ranking — kontrast z krokiem 3 |
-| 5 | Weryfikacja wzorów `similarity` | `cosine: similarity = 1 − distance`, alias `score == distance` |
-| 6 | `clear` i reset licznika ID | `{"deleted": 7}`, kolejne `index_*` daje `id: 0` |
-| 7 | Idempotencja `clear` na pustej bazie | `{"deleted": 0}` bez błędu |
+| # | Akcja | Co weryfikujemy |
+|---|-------|-----------------|
+| 1 | `stats` na pustej bazie | Nowy kształt z `default_metric` i `embedder` |
+| 2 | Indeksowanie 30 chunków z korpusu | ID 0–29, `count: 30` |
+| 3 | Same-language retrieval — PL→PL, EN→EN, UA→UA | Top-1 to chunk z **właściwego tematu** |
+| 4 | Cross-lingual retrieval — jedno zapytanie, wszystkie języki | W top-3 powinny być wersje tego samego tematu (lub jednego języka) |
+| 5 | Analiza gap'ów PL vs EN vs UA | EN ma największy gap, PL/UA wyraźnie mniejszy |
+| 6 | Wzory `similarity` na realnych wynikach | `score == distance`, `similarity = 1 − distance` (cosine) |
+| 7 | `clear` i reset licznika ID | `{"deleted": 30}`, kolejny `index_*` → `id: 0` |
 
 ---
 
 ## Krok 1 — Stan początkowy
-
-Po reloadzie klienta MCP wywołać:
 
 ```
 stats()
@@ -71,154 +73,201 @@ Oczekiwana odpowiedź:
 }
 ```
 
-**Czerwona flaga:** brak `default_metric` lub `embedder` → klient MCP nadal
-korzysta ze starej binarki sprzed Phase 2.5. Wrócić do punktu 3 wymagań
-wstępnych.
+**Czerwona flaga:** brak `default_metric` lub `embedder` → klient MCP nie
+przeładował binarki sprzed Phase 2.5. Wrócić do punktu 3 wymagań wstępnych.
 
 ---
 
-## Krok 2 — Indeksowanie korpusu polskiego
+## Krok 2 — Indeksowanie korpusu
 
-Wywołać `index_document` siedem razy. Korpus jest podzielony na cztery
-tematy (kalendarz, zakupy, incydenty produkcyjne, zdrowie), żeby wyszukiwarka
-miała wystarczającą różnorodność semantyczną.
+Korpus ma **stałą strukturę 30 chunków**: 10 tematów × 3 języki. Każdy chunk
+indeksujemy oddzielnie z metadanymi `topic` (numer 1–10) oraz `lang` (`en` /
+`pl` / `uk`). To daje łatwy filtr przy weryfikacji wyników.
+
+**Schemat metadanych:**
+
+```json
+{
+  "topic": "<1..10>",
+  "lang":  "<en|pl|uk>",
+  "section": "<krótka etykieta tematu>"
+}
+```
+
+**Wzór wywołania** (powtórzyć dla wszystkich 30 chunków z `TEST-CORPUS-MULTILINGUAL.md`):
 
 ```text
-1. index_document(
-     text="Spotkanie zespołu inżynierskiego w piątek o 15:00 w sali konferencyjnej.",
-     metadata={"category": "calendar"})
+index_document(
+  text="To unlock a scooter, open the ScootGo app, scan the QR code...",
+  metadata={"topic": "1", "lang": "en", "section": "unlocking"})
 
-2. index_document(
-     text="Przegląd kwartalnych wyników z dyrektorem we wtorek rano.",
-     metadata={"category": "calendar"})
+index_document(
+  text="Aby odblokować hulajnogę, otwórz aplikację ScootGo, zeskanuj kod QR...",
+  metadata={"topic": "1", "lang": "pl", "section": "unlocking"})
 
-3. index_document(
-     text="Kupić mleko, chleb i jajka po drodze do domu.",
-     metadata={"category": "shopping"})
+index_document(
+  text="Щоб розблокувати самокат, відкрийте додаток ScootGo, відскануйте QR-код...",
+  metadata={"topic": "1", "lang": "uk", "section": "unlocking"})
 
-4. index_document(
-     text="Zamówić nowy laptop dla zespołu projektowego.",
-     metadata={"category": "shopping"})
-
-5. index_document(
-     text="Commit a3f9b2 zepsuł pipeline produkcyjny po południu.",
-     metadata={"category": "incident"})
-
-6. index_document(
-     text="Baza danych zwraca timeout na zapytaniach analitycznych.",
-     metadata={"category": "incident"})
-
-7. index_document(
-     text="Wizyta u dentysty zarezerwowana na poniedziałek po południu.",
-     metadata={"category": "health"})
+# … i tak dalej dla tematów 2–10
 ```
 
-Każde wywołanie powinno zwrócić `{"id": N}` z `N` rosnącym od 0 do 6.
+**Etykiety `section`** (skróty tematów dla łatwiejszej oceny wyników):
 
-Sprawdzenie:
+| topic | section |
+|-------|---------|
+| 1 | unlocking |
+| 2 | payment |
+| 3 | speed |
+| 4 | helmet |
+| 5 | parking |
+| 6 | battery |
+| 7 | damage |
+| 8 | support |
+| 9 | refunds |
+| 10 | safety |
+
+Po wszystkim:
 
 ```
-stats()    →    "count": 7
+stats()    →    "count": 30
+```
+
+Wszystkie zwrócone `id` powinny mieścić się w zakresie 0–29 i być rosnące.
+
+---
+
+## Krok 3 — Same-language retrieval
+
+Dla każdego z trzech języków robimy zapytanie o **temat 5 (parkowanie)** w
+tym samym języku. Spodziewany wynik: top-1 to chunk z `section: parking` w
+języku zapytania.
+
+```
+search_document(query="where can I park the scooter?",         k=3)
+search_document(query="gdzie mogę zaparkować hulajnogę?",       k=3)
+search_document(query="де можна припаркувати самокат?",          k=3)
+```
+
+**Co zapisać** (osobno dla każdego zapytania):
+
+| Zapytanie | Top-1 `section` | Top-1 `lang` | distance | similarity | Czy temat trafiony? | Czy język trafiony? |
+|-----------|------------------|--------------|----------|------------|---------------------|---------------------|
+| EN about parking | ? | ? | ? | ? | tak/nie | tak/nie |
+| PL about parking | ? | ? | ? | ? | tak/nie | tak/nie |
+| UA about parking | ? | ? | ? | ? | tak/nie | tak/nie |
+
+**Hipoteza, którą testujemy:**
+
+- Dla EN top-1 powinien być `{section: parking, lang: en}` z niskim distance
+- Dla PL top-1 może być `{section: parking, lang: pl}` **albo**
+  `{section: parking, lang: en}` (model lubi ciągnąć do angielskiego)
+- Dla UA podobnie — możliwe wyciąganie EN-wersji w wyniku słabości
+  multilingual w MiniLM
+
+Powtórzyć dla **tematu 9 (zwroty pieniędzy)**:
+
+```
+search_document(query="can I get a refund?",                    k=3)
+search_document(query="czy mogę otrzymać zwrot pieniędzy?",      k=3)
+search_document(query="чи можна отримати повернення коштів?",    k=3)
+```
+
+I dla **tematu 1 (odblokowanie)**:
+
+```
+search_document(query="how do I unlock a scooter?",             k=3)
+search_document(query="jak odblokować hulajnogę?",              k=3)
+search_document(query="як розблокувати самокат?",                k=3)
 ```
 
 ---
 
-## Krok 3 — Wyszukiwanie po polsku
+## Krok 4 — Cross-lingual retrieval
+
+Dla zapytania w jednym języku sprawdzamy, **czy wersje tego samego tematu w
+innych językach też są w top-3**.
 
 ```
-search_document(
-  query="jakie spotkania mam zaplanowane w tym tygodniu?",
-  k=5)
+search_document(query="gdzie mogę zaparkować hulajnogę?", k=5)
 ```
 
-**Oczekiwane jakościowo:**
+Top-5 powinien zawierać 3 chunki z `section: parking` (po jednym na język),
+ewentualnie zmieszane z bliskimi tematycznie (np. `topic 3 — speed`,
+`topic 5 — parking` to powiązane reguły drogowe).
 
-- Top-1: jeden z dokumentów `category: calendar` (id 0 albo id 1)
-- `distance` w okolicy `0.6–0.9` (dla cosine na L2-normalized wektorach)
-- `similarity = 1 − distance` w okolicy `0.1–0.4`
-- **Gap** między top-1 a top-2: niewielki, często **< 0.10**
+**Co weryfikujemy:**
 
-Powtórzyć dla pozostałych tematów:
+| Pozycja | section | lang | distance |
+|---------|---------|------|----------|
+| 1 | parking | ? | ? |
+| 2 | parking | ? | ? |
+| 3 | parking | ? | ? |
+| 4 | (inny temat) | ? | ? |
+| 5 | (inny temat) | ? | ? |
 
-```
-search_document(query="co muszę kupić w sklepie?", k=5)
-search_document(query="jakie są problemy z systemem produkcyjnym?", k=5)
-search_document(query="kiedy mam wizytę u lekarza?", k=5)
-```
-
-**Co zapisać:**
-
-| Zapytanie | Top-1 id | Top-1 distance | Top-1 similarity | Gap do top-2 |
-|-----------|----------|----------------|------------------|--------------|
-| spotkania | ?        | ?              | ?                | ?            |
-| zakupy    | ?        | ?              | ?                | ?            |
-| problemy  | ?        | ?              | ?                | ?            |
-| lekarz    | ?        | ?              | ?                | ?            |
-
-Mały gap to oczekiwany objaw słabości MiniLM-L6-v2 dla treści innych niż
-angielska — udokumentowane w `docs/components/embed.md` w sekcji
-"Model Limitations".
+Jeżeli top-3 to wszystkie trzy wersje językowe `section: parking`, model
+robi przyzwoity cross-lingual matching dla tego tematu. Jeżeli top-3 to
+mieszanka tematów po angielsku — model bardziej "lubi" angielski niż
+trzyma się tematu.
 
 ---
 
-## Krok 4 — Te same zapytania po angielsku (kontrola)
+## Krok 5 — Analiza gap'ów PL vs EN vs UA
+
+Z trzech zapytań w kroku 3 (same temat — parkowanie) policzyć **gap między
+top-1 a top-2** dla każdego języka:
 
 ```
-search_document(query="what meetings do I have this week?", k=5)
-search_document(query="what should I buy at the store?", k=5)
-search_document(query="what production problems are there?", k=5)
-search_document(query="when is my doctor appointment?", k=5)
+gap = top2.distance - top1.distance
 ```
 
-**Co porównać z krokiem 3:**
+| Język | gap | Komentarz |
+|-------|-----|-----------|
+| EN | ? | spodziewane: największy gap, np. > 0.15 |
+| PL | ? | spodziewane: mniejszy, np. 0.05–0.15 |
+| UA | ? | spodziewane: najmniejszy lub porównywalny z PL |
 
-- Distance dla top-1 powinien być wyraźnie mniejszy (~0.4–0.6 zamiast 0.6–0.9)
-- Gap do top-2 powinien być wyraźnie większy (> 0.15)
-- Top-1 powinien zawsze być z właściwej kategorii
+**Interpretacja:**
 
-Jeżeli różnica jest oczywista — to praktyczna demonstracja udokumentowanego
-ograniczenia. Jeżeli nie ma różnicy — coś jest nie tak z embedderem lub
-korpusem; sprawdzić logi serwera (stderr).
+- Duży gap = model jest pewny swojego top-1 (czyste trafienie)
+- Mały gap = top-1 i top-2 prawie nieodróżnialne (top-1 może być przypadkowy)
+- Jeżeli EN zdecydowanie wygrywa pod względem gap'u — to praktyczne
+  potwierdzenie udokumentowanego ograniczenia MiniLM-L6-v2 z
+  `docs/components/embed.md`.
 
 ---
 
-## Krok 5 — Weryfikacja wzorów `similarity`
+## Krok 6 — Weryfikacja wzorów `similarity`
 
-Wziąć dowolny wynik z kroków 3 lub 4 i sprawdzić ręcznie:
+Z dowolnego wyniku z kroków 3–4 sprawdzić ręcznie:
 
 | Pole | Definicja | Sprawdzenie |
 |------|-----------|-------------|
 | `score` | alias dla `distance` | `score == distance` (dokładnie) |
 | `similarity` (cosine, default) | `1 − distance` | różnica < 1e-5 |
 
-Wymusić pozostałe metryki na tym samym zapytaniu:
+Wymusić pozostałe metryki na **tym samym zapytaniu**:
 
 ```
-search_document(query="...", k=1, metric="euclidean")
+search_document(query="jak odblokować hulajnogę?", k=1, metric="euclidean")
 # similarity = 1 / (1 + distance)
 
-search_document(query="...", k=1, metric="dot")
-# similarity = -distance  (= raw dot product, niegraniczony)
+search_document(query="jak odblokować hulajnogę?", k=1, metric="dot")
+# similarity = -distance  (= raw dot product)
 ```
 
-Ręczna weryfikacja:
-
-- Dla cosine zapytanie identyczne z dokumentem dałoby `distance ≈ 0` i
-  `similarity ≈ 1.0` — nie da się tego sprawdzić bezpośrednio dla zapytań
-  naturalnych, ale jest to gwarantowane testem `phase_2_5_full_surface`.
-- Dla euclidean: similarity zawsze w `(0, 1]`.
-- Dla dot: similarity może być ujemny, jeśli wektory są przeciwlegle
-  zorientowane — to nie błąd.
+Sprawdzić, że dla każdej metryki wzór jest zachowany.
 
 ---
 
-## Krok 6 — `clear` i reset licznika ID
+## Krok 7 — `clear` i reset licznika ID
 
 ```
 clear()
 ```
 
-Oczekiwane: `{"deleted": 7}`.
+Oczekiwane: `{"deleted": 30}` — dokładnie liczba zindeksowanych chunków.
 
 ```
 stats()
@@ -229,33 +278,25 @@ Oczekiwane:
 - `count: 0`
 - `dimension: 384` (zachowane)
 - `embedder.model: "sentence-transformers/all-MiniLM-L6-v2"` (zachowane)
+- `default_metric` — bez zmian
 
 ```
 index_document(text="Pierwsze zdanie po wyczyszczeniu bazy.")
 ```
 
-Oczekiwane: `{"id": 0}` — licznik ID został zresetowany przez `clear`.
+Oczekiwane: `{"id": 0}` — licznik ID zresetowany przez `clear`.
 
 ```
-search_document(query="jaka jest pierwsza fraza?", k=1)
+clear()
 ```
 
-Oczekiwane: jeden wynik, `id: 0`, distance niski (zapytanie blisko semantycznie).
-
----
-
-## Krok 7 — Idempotencja `clear` na pustej bazie
-
-Po kroku 6 baza ma jeden dokument. Wywołać:
+Oczekiwane: `{"deleted": 1}`.
 
 ```
-clear()    →    {"deleted": 1}
-clear()    →    {"deleted": 0}
+clear()
 ```
 
-Druga próba czyszczenia pustej bazy musi zwrócić `0` bez błędu. To gwarancja,
-że klient może bezpiecznie wywołać `clear` przed nową sesją bez sprawdzania
-`stats` w pętli.
+Oczekiwane: `{"deleted": 0}` — idempotencja na pustej bazie.
 
 ---
 
@@ -266,20 +307,26 @@ Test zaliczony, jeżeli wszystkie poniższe są prawdziwe:
 1. **Kształt `stats`**: zawiera `count`, `dimension`, `default_metric.raw_vector`,
    `default_metric.document`, `embedder.model`, `embedder.dim`, oraz alias
    `metric` na najwyższym poziomie.
-2. **`clear` na niepustej bazie** zwraca dokładnie liczbę dokumentów przed
-   czyszczeniem.
-3. **`clear` na pustej bazie** zwraca `{"deleted": 0}` bez błędu.
-4. **Reset ID**: po `clear` następne `index_*` zwraca `id: 0`.
-5. **Pola wyniku**: każdy wynik `search` i `search_document` zawiera
-   `id`, `text`, `metadata`, `distance`, `similarity`, `score`.
+2. **Indeksowanie korpusu**: wszystkie 30 wywołań `index_document` zwracają
+   rosnące `id` w zakresie 0–29. Po wszystkim `stats.count == 30`.
+3. **Same-language top-1 dla EN**: zapytania angielskie z kroku 3 zawsze
+   trafiają top-1 z prawidłową `section` (model jest trenowany głównie po
+   angielsku).
+4. **Same-language top-1 dla PL/UA — best effort**: w idealnym przypadku
+   trafiamy `section`, ale ze względu na ograniczenie multilingual MiniLM
+   pojedyncze pomyłki tematu są dopuszczalne. Brak trafień w temacie w
+   więcej niż 1 z 3 zapytań → potwierdzenie znanej słabości modelu, **nie**
+   regresja Phase 2.5.
+5. **Pola wyniku**: każdy wynik `search_document` zawiera `id`, `text`,
+   `metadata`, `distance`, `similarity`, `score`.
 6. **Alias `score`**: dla każdego wyniku `score == distance`.
 7. **Wzór cosine**: `similarity == 1.0 − distance` (tolerancja 1e-5).
-8. **Wzór euclidean** (po wymuszeniu `metric: "euclidean"`):
-   `similarity == 1.0 / (1.0 + distance)` (tolerancja 1e-5).
-9. **Lock dimension**: `dimension == 384` przez cały czas trwania testu, w tym
-   po `clear`.
-10. **Kontrast PL vs EN**: zapytania angielskie z kroku 4 dają wyraźniejszy gap
-    do runner-up niż polskie z kroku 3 (potwierdzenie znanej słabości modelu).
+8. **Wzór euclidean**: `similarity == 1.0 / (1.0 + distance)` (tolerancja 1e-5).
+9. **Wzór dot**: `similarity == -distance`.
+10. **Reset ID po `clear`**: następne `index_*` zwraca `id: 0`.
+11. **Idempotencja `clear`**: drugie wywołanie na pustej bazie zwraca
+    `{"deleted": 0}` bez błędu.
+12. **Lock dimension**: `dimension == 384` przez cały czas trwania testu.
 
 ---
 
@@ -287,7 +334,7 @@ Test zaliczony, jeżeli wszystkie poniższe są prawdziwe:
 
 - Pomiar wydajności (czas KNN, throughput indeksowania) → dla `/bench`.
 - Testy SIMD → Phase 3.
-- Wymiana modelu na multilingual → przyszła faza.
+- Wymiana modelu na multilingual e5 / bge-m3 → przyszła faza.
 - Reżim współbieżny (wiele równoległych `index_document`) → osobny scenariusz.
 
 ---
@@ -296,16 +343,19 @@ Test zaliczony, jeżeli wszystkie poniższe są prawdziwe:
 
 | Symptom | Prawdopodobna przyczyna | Co zrobić |
 |---------|-------------------------|-----------|
-| Brak narzędzia `clear` na liście MCP | Klient nie przeładował binarki | `/mcp` → reconnect `nanovec` |
+| Brak narzędzia `clear` na liście MCP | Klient nie przeładował binarki | `/mcp` → reconnect `nanovec`, sprawdzić czy `target/release/nanovec` jest świeży |
 | `stats` zwraca tylko `count`, `dimension`, `metric` | Klient na starej wersji | jak wyżej |
-| Kompletnie chaotyczny ranking po polsku | Znana słabość MiniLM | przeczytać `docs/components/embed.md`, sekcja "Model Limitations" |
-| `search_document` zwraca `[]` mimo zindeksowanych dokumentów | Wymiar zapytania ≠ 384, albo embedder się nie załadował | sprawdzić stderr serwera, `embedder.dim` w `stats` |
-| `score` ma wartość `null` lub brak go w odpowiedzi | Bug w aliasie backward-compat | otworzyć issue, podać dokładny request/response |
+| `search_document` zwraca `[]` dla niepustej bazy | Embedder nie załadował się prawidłowo | sprawdzić stderr serwera (logowanie tracing), `embedder.dim` w `stats` |
+| Top-1 dla PL/UA z innego tematu | Znana słabość MiniLM-L6-v2 dla treści innych niż angielska | nie regresja — porównać z EN, jeżeli EN czyste, to model ma trudność z polskim/ukraińskim |
+| `score` == 0 dla wszystkich wyników | Bug w aliasie backward-compat | otworzyć issue, dołączyć dokładny request/response |
+| `similarity` nie zgadza się z formułą | Bug w `similarity_for` | sprawdzić użytą metrykę (`metric` w wywołaniu, `default_metric` w `stats`), bo formuła jest metryko-zależna |
+| Embedder ładuje się 30+ s przy każdym restarcie | Brak cache HuggingFace | sprawdzić `~/.cache/huggingface/hub/`, ewentualnie zaakceptować jako koszt jednorazowy |
 
 ---
 
 ## Powiązane
 
+- Korpus testowy: [`TEST-CORPUS-MULTILINGUAL.md`](TEST-CORPUS-MULTILINGUAL.md)
 - Plan: [`plans/phase-2.5-ergonomics-plan.md`](plans/phase-2.5-ergonomics-plan.md)
 - Dispatch: [`plans/phase-2.5-ergonomics-dispatch.md`](plans/phase-2.5-ergonomics-dispatch.md)
 - Raport: [`plans/phase-2.5-ergonomics-report.md`](plans/phase-2.5-ergonomics-report.md)
