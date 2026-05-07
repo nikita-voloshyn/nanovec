@@ -18,9 +18,11 @@ use tokenizers::Tokenizer;
 /// Hardcoded embedding dimension for the chosen MiniLM model.
 const EMBEDDING_DIM: usize = 384;
 
-/// HuggingFace repo for the embedding model. Pinned to the canonical
-/// sentence-transformers checkpoint.
-const MODEL_REPO_ID: &str = "sentence-transformers/all-MiniLM-L6-v2";
+/// Canonical HuggingFace identifier for the embedding model. Pinned to the
+/// `sentence-transformers/all-MiniLM-L6-v2` checkpoint and exposed publicly so
+/// callers (e.g. `stats` MCP tool) can report which model is loaded without
+/// duplicating the string.
+pub const MODEL_NAME: &str = "sentence-transformers/all-MiniLM-L6-v2";
 
 /// Loaded text embedder. Cheap to share via `Arc` — `embed(&self, ...)` is
 /// read-only after [`Embedder::load`].
@@ -77,7 +79,7 @@ impl Embedder {
         let device = Device::Cpu;
 
         let api = Api::new().map_err(|e| EmbedError::DownloadFailed(e.to_string()))?;
-        let repo = api.model(MODEL_REPO_ID.to_string());
+        let repo = api.model(MODEL_NAME.to_string());
 
         let config_path = repo
             .get("config.json")
@@ -121,6 +123,11 @@ impl Embedder {
     /// Embedding output dimension. Fixed at 384 for MiniLM-L6-v2.
     pub fn dimension(&self) -> usize {
         EMBEDDING_DIM
+    }
+
+    /// Canonical HuggingFace identifier of the loaded model.
+    pub fn model_name(&self) -> &'static str {
+        MODEL_NAME
     }
 
     /// Encode `text` into an L2-normalized 384-dimensional vector.
@@ -222,6 +229,16 @@ mod tests {
         let v = EMBEDDER.embed("hello world").expect("embed");
         assert_eq!(v.len(), 384);
         assert_eq!(EMBEDDER.dimension(), 384);
+    }
+
+    #[test]
+    fn model_name_const_matches_canonical_repo() {
+        assert_eq!(MODEL_NAME, "sentence-transformers/all-MiniLM-L6-v2");
+    }
+
+    #[test]
+    fn model_name_accessor_returns_const() {
+        assert_eq!(EMBEDDER.model_name(), MODEL_NAME);
     }
 
     #[test]
