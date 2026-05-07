@@ -269,6 +269,19 @@ impl NanoVecServer {
         Ok(serde_json::json!({ "success": true }).to_string())
     }
 
+    #[tool(
+        name = "clear",
+        description = "Remove all indexed documents. Resets the ID counter so the next inserted document gets id=0. Dimension lock is preserved."
+    )]
+    fn clear(&self) -> Result<String, String> {
+        let mut state = self.state.lock().map_err(|e| format!("lock error: {e}"))?;
+        let deleted = state.records.count();
+        state.store.clear();
+        state.records.clear();
+        tracing::info!(count = deleted, "cleared store");
+        Ok(serde_json::json!({ "deleted": deleted }).to_string())
+    }
+
     #[tool(name = "stats", description = "Get database statistics")]
     fn stats(&self) -> Result<String, String> {
         let state = self.state.lock().map_err(|e| format!("lock error: {e}"))?;
