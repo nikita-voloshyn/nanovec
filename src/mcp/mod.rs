@@ -100,6 +100,23 @@ fn metric_token(metric: Metric) -> &'static str {
     }
 }
 
+/// Normalize a raw distance into a "higher = closer" similarity score for
+/// downstream UX. Mapping is metric-specific:
+///   - Cosine distance ∈ [0, 2] → similarity = 1 - d ∈ [-1, 1]
+///   - Euclidean distance ∈ [0, ∞) → similarity = 1 / (1 + d) ∈ (0, 1]
+///   - Dot product (stored as `-dot`) → similarity = -d (raw dot product, unbounded)
+///
+/// Cosine and Euclidean stay well-behaved for ranking. Dot-product similarity
+/// is unbounded by design — clients comparing dot scores should rely on
+/// ordering, not absolute magnitude.
+fn similarity_for(metric: Metric, distance: f32) -> f32 {
+    match metric {
+        Metric::Cosine => 1.0 - distance,
+        Metric::Euclidean => 1.0 / (1.0 + distance),
+        Metric::DotProduct => -distance,
+    }
+}
+
 #[tool_router]
 impl NanoVecServer {
     #[tool(
@@ -196,10 +213,21 @@ impl NanoVecServer {
         let json_results: Vec<serde_json::Value> = results
             .into_iter()
             .map(|r| {
+                let similarity = similarity_for(metric, r.score);
+                let metadata: serde_json::Map<String, serde_json::Value> = r
+                    .metadata
+                    .into_iter()
+                    .map(|(k, v)| (k, serde_json::Value::String(v)))
+                    .collect();
                 serde_json::json!({
                     "id": r.id,
-                    "score": r.score,
                     "text": r.text,
+                    "metadata": metadata,
+                    "distance": r.score,
+                    "similarity": similarity,
+                    // Backward-compat alias for `distance` — kept so Phase 1/2
+                    // clients reading `score` continue to work unchanged.
+                    "score": r.score,
                 })
             })
             .collect();
@@ -250,11 +278,15 @@ impl NanoVecServer {
                     .into_iter()
                     .map(|(k, v)| (k, serde_json::Value::String(v)))
                     .collect();
+                let similarity = similarity_for(metric, r.score);
                 serde_json::json!({
                     "id": r.id,
-                    "score": r.score,
                     "text": r.text,
                     "metadata": metadata,
+                    "distance": r.score,
+                    "similarity": similarity,
+                    // Backward-compat alias for `distance`.
+                    "score": r.score,
                 })
             })
             .collect();
