@@ -6,7 +6,7 @@
 
 NanoVec — реалізація векторної бази даних на чистому Rust, написана з нуля для AI-агентів, яким потрібна короткочасна семантична пам'ять. Цілі: семантичний пошук за сабмілісекунду, мініатюрний статичний бінарник і єдиний зовнішній інтерфейс — Model Context Protocol через stdio.
 
-**Статус:** Phase 1 (MVP MCP-сервер) і Phase 2 (серверні ембеддинги) завершені. Що далі — у [`docs/ROADMAP.md`](docs/ROADMAP.md).
+**Статус:** Phase 1 (MVP), Phase 2 (серверні ембеддинги) та Phase 2.5 (search ergonomics — `clear`, розширений `stats`, поле similarity) завершені. Що далі — у [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## Що всередині
 
@@ -52,13 +52,16 @@ cargo build --release
 | Інструмент | Вхід | Вихід |
 |------------|------|-------|
 | `index_document` | `text`, опційно `metadata` | `{ "id": u64 }` |
-| `search_document` | `query`, `k`, опційно `metric` | `[{ id, text, metadata, score }]` |
+| `search_document` | `query`, `k`, опційно `metric` | `[{ id, text, metadata, distance, similarity, score }]` |
 | `index_vector` | `text`, `vector` (довжина 384), опційно `metadata` | `{ "id": u64 }` |
-| `search` | `vector` (довжина 384), `k`, опційно `metric` | `[{ id, text, metadata, score }]` |
-| `delete` | `id` | `{ "deleted": bool }` |
-| `stats` | — | `{ "count": usize, "dimension": usize }` |
+| `search` | `vector` (довжина 384), `k`, опційно `metric` | `[{ id, text, metadata, distance, similarity, score }]` |
+| `delete` | `id` | `{ "success": bool }` |
+| `clear` | — | `{ "deleted": usize }` |
+| `stats` | — | `{ count, dimension, default_metric, embedder, metric }` |
 
 За замовчуванням метрика — `euclidean` для raw-vector шляху і `cosine` для document шляху. Перевизначається через `"euclidean"`, `"cosine"` або `"dot"`.
+
+Результати пошуку містять і `distance` (raw, менше = ближче), і `similarity` (метрико-залежне, більше = ближче). Поле `score` — backward-compat alias для `distance`. `clear` скидає лічильник ID, тож наступний документ отримує `id: 0`.
 
 Розмірність вектора фіксується на 384 у момент завантаження ембеддера. Виклики `index_vector` з іншою розмірністю відхиляються.
 

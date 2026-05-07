@@ -87,7 +87,7 @@ This ensures that tracing output never contaminates the JSON-RPC stream.
 
 ## Tool Definitions
 
-The server registers six tools using `rmcp`'s `#[tool_router]` and `#[tool]` macros.
+The server registers seven tools using `rmcp`'s `#[tool_router]` and `#[tool]` macros: `index_vector`, `index_document`, `search`, `search_document`, `delete`, `clear`, `stats`.
 
 ### `index_vector`
 
@@ -200,13 +200,27 @@ Search for the K nearest vectors to a query vector.
 
 ```json
 [
-  { "id": 7, "score": 0.12, "text": "most similar document" },
-  { "id": 3, "score": 0.45, "text": "second most similar" }
+  {
+    "id": 7,
+    "text": "most similar document",
+    "metadata": { "category": "calendar" },
+    "distance": 0.12,
+    "similarity": 0.893,
+    "score": 0.12
+  },
+  {
+    "id": 3,
+    "text": "second most similar",
+    "metadata": {},
+    "distance": 0.45,
+    "similarity": 0.690,
+    "score": 0.45
+  }
 ]
 ```
 
-Note: the `search` tool output does not include `metadata`. Use `search_document` if
-metadata in results is needed.
+Phase 2.5 score normalization (see "Score Fields" below) added `distance` and
+`similarity`; `score` remains as a backward-compat alias for `distance`.
 
 ### `search_document`
 
@@ -253,12 +267,27 @@ Query for meetings:
 }
 ```
 
-Response (scores vary; cosine range for L2-normalized 384-dim vectors is `[0.0, 2.0]`):
+Response (cosine distance ∈ `[0.0, 2.0]` for L2-normalized vectors; similarity = `1 - distance`):
 ```json
 [
-  { "id": 0, "score": 0.42, "text": "meeting with engineering team on friday at 3pm", "metadata": { "category": "calendar" } },
-  { "id": 2, "score": 0.89, "text": "git commit hash a3f9b2 broke the deploy pipeline", "metadata": { "category": "incident" } },
-  { "id": 1, "score": 1.07, "text": "buy milk and bread on the way home", "metadata": { "category": "shopping" } }
+  {
+    "id": 0,
+    "text": "meeting with engineering team on friday at 3pm",
+    "metadata": { "category": "calendar" },
+    "distance": 0.42, "similarity": 0.58, "score": 0.42
+  },
+  {
+    "id": 2,
+    "text": "git commit hash a3f9b2 broke the deploy pipeline",
+    "metadata": { "category": "incident" },
+    "distance": 0.89, "similarity": 0.11, "score": 0.89
+  },
+  {
+    "id": 1,
+    "text": "buy milk and bread on the way home",
+    "metadata": { "category": "shopping" },
+    "distance": 1.07, "similarity": -0.07, "score": 1.07
+  }
 ]
 ```
 
@@ -296,6 +325,33 @@ Delete a document by its ID.
 
 **Output (error):** JSON-RPC error string, e.g., `"record not found: 999"`.
 
+### `clear`
+
+Remove all indexed documents in one call. Resets the ID counter so the next
+inserted document gets `id: 0`. The dimension lock (set at startup by the
+embedder) is preserved.
+
+**Input schema:** none. Pass `"arguments": {}`.
+
+**Behavior:**
+
+1. Captures the current `records.count()` as `deleted`.
+2. Calls `VectorStore::clear()` and `RecordStore::clear()` under the state
+   Mutex (one critical section).
+3. Logs `tracing::info!(count = N, "cleared store")`.
+4. Returns `{ "deleted": N }`.
+
+`clear` on an empty store is a no-op and returns `{ "deleted": 0 }`.
+
+**Output (success):**
+
+```json
+{ "deleted": 24 }
+```
+
+After `clear`, any previously-returned ID is stale. Clients that cached IDs
+must re-index and re-query.
+
 ### `stats`
 
 Get current database statistics. Takes no parameters.
@@ -306,13 +362,56 @@ Get current database statistics. Takes no parameters.
 {
   "count":     12,
   "dimension": 384,
-  "metric":    "Euclidean"
+  "default_metric": {
+    "raw_vector": "euclidean",
+    "document":   "cosine"
+  },
+  "embedder": {
+    "model": "sentence-transformers/all-MiniLM-L6-v2",
+    "dim":   384
+  },
+  "metric": "Euclidean"
 }
 ```
 
-`dimension` is always `384` in Phase 2 and later — the store is initialized at startup
-with the embedder's dimension and never changes. The field name is preserved for
+| Field | Meaning |
+|-------|---------|
+| `count` | Number of indexed documents |
+| `dimension` | Locked vector dimension (always `384` in Phase 2+) |
+| `default_metric.raw_vector` | Default metric for `search` when `metric` is omitted (server-wide default) |
+| `default_metric.document` | Default metric for `search_document` when `metric` is omitted (always `"cosine"`) |
+| `embedder.model` | Canonical HuggingFace identifier of the loaded embedding model |
+| `embedder.dim` | Output dimension of the embedder (mirrored in `dimension`) |
+| `metric` | Backward-compat alias for `default_metric.raw_vector` rendered as the enum debug name (`"Euclidean"`, `"Cosine"`, `"DotProduct"`) — kept for Phase 1/2 clients |
+
+`dimension` is always `384` — the store is initialized at startup with the
+embedder's dimension and never changes. The field name is preserved for
 backward compatibility with Phase 1 clients that checked for `dimension: null`.
+
+## Score Fields (Phase 2.5)
+
+`search` and `search_document` results carry three numeric ranking fields per result:
+
+| Field | Range | Direction | Definition |
+|-------|-------|-----------|------------|
+| `distance` | metric-specific | lower = closer | Raw output of the configured `Distance::compute` (the value used by `BoundedMaxHeap` to rank during the scan) |
+| `similarity` | metric-specific | higher = closer | Normalized friendliness score for UX |
+| `score` | same as `distance` | — | Backward-compat alias for `distance` |
+
+The `similarity` mapping is metric-aware:
+
+| Metric | Distance range | Similarity formula | Similarity range |
+|--------|---------------|--------------------|------------------|
+| `cosine` | `[0, 2]` | `1 - distance` | `[-1, 1]` |
+| `euclidean` | `[0, ∞)` | `1 / (1 + distance)` | `(0, 1]` |
+| `dot` | `(-∞, ∞)` (stored as `-dot`) | `-distance` (= raw dot product) | `(-∞, ∞)` |
+
+**Cosine and euclidean are well-behaved for ranking** — clients can use
+`similarity` directly as a "higher is better" score. **DotProduct similarity
+is unbounded by design** — for unnormalized inputs the magnitude depends on
+input scale, so clients comparing dot scores should rely on result ordering
+rather than absolute thresholds. For thresholding use cases on the embedded
+path, prefer cosine.
 
 ## Server Info
 
@@ -355,8 +454,8 @@ Unknown strings return an error: `"unknown metric: <value>"`.
 |------|------|
 | `src/main.rs` | Binary entry point; configures tracing to stderr, calls `server::run()` |
 | `src/server/mod.rs` | `run()` -- loads embedder, constructs server, starts stdio transport, awaits shutdown |
-| `src/mcp/mod.rs` | `NanoVecState`, `NanoVecServer`, all six tool implementations, metric/metadata parsers |
-| `src/mcp/tools.rs` | `IndexVectorParams`, `IndexDocumentParams`, `SearchParams`, `SearchDocumentParams`, `DeleteParams` structs |
+| `src/mcp/mod.rs` | `NanoVecState`, `NanoVecServer`, all seven tool implementations, metric/metadata parsers, `similarity_for` helper |
+| `src/mcp/tools.rs` | `IndexVectorParams`, `IndexDocumentParams`, `SearchParams`, `SearchDocumentParams`, `DeleteParams` structs (`clear` and `stats` take no parameters) |
 
 ## Dependencies
 
@@ -373,14 +472,15 @@ Unknown strings return an error: `"unknown metric: <value>"`.
 
 ## Test Coverage
 
-2 integration tests covering the full JSON-RPC flow (files in `tests/integration/`):
+3 integration tests covering the full JSON-RPC flow (files in `tests/integration/`):
 
 | Test | File | What it covers |
 |------|------|----------------|
 | `test_mcp_full_flow` | `mcp_stdio.rs` | `index_vector` (384-dim unit vector), `search`, `delete`, `stats` — raw-vector path; verifies dimension is locked at 384 throughout |
 | `test_semantic_search_end_to_end` | `mcp_embedding.rs` | `index_document` (3 documents with metadata), `search_document` (3 semantic queries with correct top-1 assertions), `delete`, `stats`, post-delete search — full embedded path |
+| `phase_2_5_full_surface` | `mcp_phase25.rs` | `clear` (deleted count, idempotent on empty), expanded `stats` shape (`default_metric`, `embedder`, legacy `metric` alias), `next_id` reset to 0 after clear, `distance` + `similarity` + `score` alias on search results, similarity formula correctness for euclidean and cosine |
 
-Both tests spawn the real `nanovec` binary as a child process and communicate via
+All three tests spawn the real `nanovec` binary as a child process and communicate via
 newline-delimited JSON-RPC 2.0 over stdio. The embedding test requires HuggingFace
 model cache (`~/.cache/huggingface/`) or internet access to download the model on
 first run.

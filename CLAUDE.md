@@ -7,7 +7,7 @@ NanoVec is a lightweight, zero-dependency, pure in-memory vector database engine
 **Repository:** https://github.com/nikita-voloshyn/nanovec
 **Language:** Rust (stable + nightly for portable_simd)
 **Build system:** Cargo
-**Phase:** Phase 1 complete (MVP MCP server), Phase 2 next (server-side embeddings via candle)
+**Phase:** Phases 1, 2, and 2.5 complete (MVP, server-side embeddings, search ergonomics — `clear` tool, expanded `stats`, `distance`/`similarity` fields). Phase 3 next (scalar → SIMD distance acceleration).
 
 ## Architecture Rules
 

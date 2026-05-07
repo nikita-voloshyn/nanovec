@@ -17,6 +17,17 @@
 | Embedder (candle + all-MiniLM-L6-v2, 384-dim, L2-normalized) | `src/embed/mod.rs` | `docs/components/embed.md` | documented |
 | `index_document` / `search_document` MCP tools | `src/mcp/tools.rs`, `src/mcp/mod.rs` | `docs/components/mcp-server.md` | documented |
 
+## Phase 2.5 (Complete — Search Ergonomics)
+
+| Component | Source | Doc file | Status |
+|-----------|--------|----------|--------|
+| `VectorStore::clear()` / `RecordStore::clear()` | `src/store/mod.rs`, `src/store/record.rs` | `docs/components/vector-store.md`, `docs/components/record-store.md` | inline in API tables; behavior documented in mcp-server.md `clear` section |
+| `Embedder::MODEL_NAME` + `model_name()` accessor | `src/embed/mod.rs` | `docs/components/embed.md` | documented |
+| `clear` MCP tool | `src/mcp/mod.rs` | `docs/components/mcp-server.md` | documented |
+| `stats` expansion (`default_metric`, `embedder` blocks) | `src/mcp/mod.rs` | `docs/components/mcp-server.md` | documented |
+| `distance` + `similarity` fields on search results | `src/mcp/mod.rs` | `docs/components/mcp-server.md` ("Score Fields" section) | documented |
+| Model limitations note (English-trained, weak on non-English) | `src/embed/mod.rs` | `docs/components/embed.md` ("Model Limitations" section) | documented |
+
 ## Phase 3 (Next — Scalar → SIMD)
 
 | Component | Planned source | Status |

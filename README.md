@@ -6,7 +6,7 @@
 
 NanoVec is a from-scratch Rust implementation of a vector database for AI agents that need short-lived semantic memory. It targets sub-millisecond similarity search, a tiny static binary, and a single external interface: the Model Context Protocol over stdio.
 
-**Status:** Phase 1 (MVP MCP server) and Phase 2 (server-side embeddings) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what comes next.
+**Status:** Phases 1 (MVP), 2 (server-side embeddings), and 2.5 (search ergonomics — `clear`, expanded `stats`, similarity field) are complete. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for what comes next.
 
 ## What you get
 
@@ -52,13 +52,16 @@ All logs go to stderr; stdout is reserved for MCP JSON-RPC traffic.
 | Tool | Input | Output |
 |------|-------|--------|
 | `index_document` | `text`, optional `metadata` | `{ "id": u64 }` |
-| `search_document` | `query`, `k`, optional `metric` | `[{ id, text, metadata, score }]` |
+| `search_document` | `query`, `k`, optional `metric` | `[{ id, text, metadata, distance, similarity, score }]` |
 | `index_vector` | `text`, `vector` (length 384), optional `metadata` | `{ "id": u64 }` |
-| `search` | `vector` (length 384), `k`, optional `metric` | `[{ id, text, metadata, score }]` |
-| `delete` | `id` | `{ "deleted": bool }` |
-| `stats` | — | `{ "count": usize, "dimension": usize }` |
+| `search` | `vector` (length 384), `k`, optional `metric` | `[{ id, text, metadata, distance, similarity, score }]` |
+| `delete` | `id` | `{ "success": bool }` |
+| `clear` | — | `{ "deleted": usize }` |
+| `stats` | — | `{ count, dimension, default_metric, embedder, metric }` |
 
 Default metric is `euclidean` for the raw-vector path and `cosine` for the document path. Override with `"euclidean"`, `"cosine"`, or `"dot"`.
+
+Search results carry both `distance` (raw, lower = closer) and `similarity` (metric-aware, higher = closer). The `score` field is a backward-compat alias for `distance`. `clear` resets the ID counter so the next inserted document gets `id: 0`.
 
 The vector dimension is locked to 384 once the embedder loads. `index_vector` calls with any other dimension are rejected.
 

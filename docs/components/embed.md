@@ -15,6 +15,10 @@ second model is needed in production).
 ```rust
 // src/embed/mod.rs
 
+/// Canonical HuggingFace identifier of the loaded model. Public so callers
+/// (e.g. the `stats` MCP tool) can report it without duplicating the string.
+pub const MODEL_NAME: &str = "sentence-transformers/all-MiniLM-L6-v2";
+
 pub struct Embedder { /* private: tokenizer, BertModel, device */ }
 
 impl Embedder {
@@ -25,6 +29,9 @@ impl Embedder {
 
     /// Always 384 for the hardcoded all-MiniLM-L6-v2 model.
     pub fn dimension(&self) -> usize;
+
+    /// Returns `MODEL_NAME` — the canonical HuggingFace identifier.
+    pub fn model_name(&self) -> &'static str;
 
     /// Encode text into a 384-dim L2-normalized vector. Read-only after load();
     /// safe to call concurrently from multiple threads.
@@ -165,6 +172,38 @@ No SIMD acceleration is applied to the BERT forward pass in Phase 2; candle uses
 standard scalar operations on CPU. Phase 3 will add SIMD to the NanoVec distance
 functions (not the BERT forward pass itself).
 
+## Model Limitations
+
+`all-MiniLM-L6-v2` was trained predominantly on English data. Empirical use
+on real corpora has surfaced two practical limits worth flagging at the API
+boundary:
+
+1. **Weak on non-English and mixed-language text.** Russian, Ukrainian, and
+   other non-Latin-script queries produce noticeably flatter score
+   distributions than English. In one observed case, a Russian query
+   ("полная бизнес воронка...") missed its target chunk by 4 ranks; the same
+   query reformulated in English with corpus-aligned terms moved the target
+   to rank 1 with a 0.247 cosine-distance gap to the runner-up. This is a
+   model limitation, not a bug in NanoVec's search.
+
+2. **Lexical sensitivity.** The 384-dim embedding has limited capacity to
+   distinguish semantically close phrasings when the corpus uses unusual or
+   technical vocabulary. Common content words (e.g. "Camera Permission",
+   "Calibration") dominate the signal and can pull queries toward chunks
+   that share surface vocabulary but diverge in topic.
+
+### Recommended mitigations (in order of ROI)
+
+| Mitigation | What to do | Cost |
+|------------|------------|------|
+| Breadcrumbs on chunks | Prepend the section path to each chunk text before indexing (`"Section 2.2 Funnel: ..."`) | 0 — keep the same chunks |
+| Query rewriting | Have an LLM reformulate the user query into corpus-aligned vocabulary before calling `search_document` | 1 extra LLM call per query |
+| Hierarchical chunking | Split heavy sections into sub-sections; keep the parent section name as a breadcrumb | 2-3× chunk count |
+
+For workloads where non-English content is dominant, the right fix is a
+multilingual embedding model (e5-multilingual, bge-m3). Replacing the model is
+out of scope for Phase 2.5; tracked as a future phase.
+
 ## Dependencies
 
 - `candle-core` 0.10 — tensor operations, `Device`, `DType`
@@ -179,7 +218,7 @@ and `src/server/mod.rs` (startup wiring).
 
 ## Test Coverage
 
-6 tests in `src/embed/mod.rs` under `#[cfg(test)]`:
+8 tests in `src/embed/mod.rs` under `#[cfg(test)]`:
 
 Tests share a single `static EMBEDDER: Lazy<Embedder>` (via `once_cell`) so the model
 loads and downloads at most once per `cargo test` run.
@@ -189,6 +228,8 @@ loads and downloads at most once per `cargo test` run.
 | `embedder_loads_and_embeds_to_384_dim` | unit | `embed("hello world").len() == 384`; `dimension() == 384` |
 | `embedding_is_deterministic` | unit | Two identical inputs produce bit-identical output (delta < 1e-6 per component) |
 | `semantic_ordering_simple` | unit | `cos_sim("dog","puppy") > cos_sim("dog","spaceship")` |
+| `model_name_const_matches_canonical_repo` | unit | `MODEL_NAME == "sentence-transformers/all-MiniLM-L6-v2"` |
+| `model_name_accessor_returns_const` | unit | `EMBEDDER.model_name() == MODEL_NAME` |
 | `embedding_is_l2_normalized` | proptest (16 cases) | `‖embed(text)‖₂ ≈ 1.0 ± 1e-3` for random alphanumeric texts |
 | `embedding_dim_always_384` | proptest (16 cases) | `embed(text).len() == 384` for random alphanumeric texts |
 
