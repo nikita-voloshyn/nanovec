@@ -90,6 +90,16 @@ fn parse_metric(s: &Option<String>, default: Metric) -> Result<Metric, String> {
     }
 }
 
+/// Render a Metric as the lowercase wire-format token used in tool params
+/// (`"euclidean"`, `"cosine"`, `"dot"`). Inverse of `parse_metric`.
+fn metric_token(metric: Metric) -> &'static str {
+    match metric {
+        Metric::Euclidean => "euclidean",
+        Metric::Cosine => "cosine",
+        Metric::DotProduct => "dot",
+    }
+}
+
 #[tool_router]
 impl NanoVecServer {
     #[tool(
@@ -293,9 +303,32 @@ impl NanoVecServer {
         let count = state.records.count();
         let metric = format!("{:?}", state.metric);
 
+        // Per-tool defaults: raw-vector path uses the server-wide metric
+        // (Phase 1 contract), document path is hardcoded to cosine because
+        // the embedder emits L2-normalized vectors and cosine reads cleanest
+        // to API consumers.
+        let raw_vector_default = metric_token(state.metric);
+        let document_default = metric_token(Metric::Cosine);
+
+        // Embedder identity exposed so clients can confirm which model is
+        // loaded without reading the binary's logs.
+        let embedder_model = state.embedder.model_name();
+        let embedder_dim = state.embedder.dimension();
+
         Ok(serde_json::json!({
             "count": count,
             "dimension": dimension,
+            "default_metric": {
+                "raw_vector": raw_vector_default,
+                "document": document_default,
+            },
+            "embedder": {
+                "model": embedder_model,
+                "dim": embedder_dim,
+            },
+            // Backward-compat alias — kept so Phase 1/2 clients reading
+            // `metric` continue to work. New clients should prefer
+            // `default_metric.raw_vector`.
             "metric": metric,
         })
         .to_string())
