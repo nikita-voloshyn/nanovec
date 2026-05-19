@@ -2,15 +2,13 @@
 /// Returns 0.0 for identical vectors, 1.0 for orthogonal, 2.0 for opposite.
 /// Returns 1.0 (max uncertainty) if either vector is zero.
 /// Panics if lengths differ.
+///
+/// Delegates to the SIMD dispatcher in [`crate::simd`]; on aarch64 this uses
+/// NEON, on x86_64 with AVX2+FMA it uses AVX2, otherwise falls back to a
+/// scalar reference implementation.
+#[inline]
 pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "vector dimension mismatch");
-    let dot: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm_a == 0.0 || norm_b == 0.0 {
-        return 1.0;
-    }
-    1.0 - (dot / (norm_a * norm_b))
+    crate::simd::cosine(a, b)
 }
 
 #[cfg(test)]

@@ -1,12 +1,12 @@
 /// L2 (Euclidean) distance between two equal-length slices.
 /// Panics if lengths differ.
+///
+/// Delegates to the SIMD dispatcher in [`crate::simd`]; on aarch64 this uses
+/// NEON, on x86_64 with AVX2+FMA it uses AVX2, otherwise falls back to a
+/// scalar reference implementation.
+#[inline]
 pub fn euclidean(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "vector dimension mismatch");
-    a.iter()
-        .zip(b.iter())
-        .map(|(x, y)| (x - y).powi(2))
-        .sum::<f32>()
-        .sqrt()
+    crate::simd::euclidean(a, b)
 }
 
 #[cfg(test)]

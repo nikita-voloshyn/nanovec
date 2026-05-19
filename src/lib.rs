@@ -4,4 +4,5 @@ pub mod heap;
 pub mod index;
 pub mod mcp;
 pub mod server;
+pub mod simd;
 pub mod store;

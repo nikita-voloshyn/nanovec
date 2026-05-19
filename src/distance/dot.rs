@@ -1,8 +1,12 @@
 /// Raw dot product. Higher value = more similar (not a distance metric).
 /// Panics if lengths differ.
+///
+/// Delegates to the SIMD dispatcher in [`crate::simd`]; on aarch64 this uses
+/// NEON, on x86_64 with AVX2+FMA it uses AVX2, otherwise falls back to a
+/// scalar reference implementation.
+#[inline]
 pub fn dot_product(a: &[f32], b: &[f32]) -> f32 {
-    assert_eq!(a.len(), b.len(), "vector dimension mismatch");
-    a.iter().zip(b.iter()).map(|(x, y)| x * y).sum()
+    crate::simd::dot_product(a, b)
 }
 
 #[cfg(test)]
