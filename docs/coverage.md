@@ -28,24 +28,26 @@
 | `distance` + `similarity` fields on search results | `src/mcp/mod.rs` | `docs/components/mcp-server.md` ("Score Fields" section) | documented |
 | Model limitations note (English-trained, weak on non-English) | `src/embed/mod.rs` | `docs/components/embed.md` ("Model Limitations" section) | documented |
 
-## Phase 3 (Next — Scalar → SIMD)
+## Phase 3 (Complete — Scalar → SIMD)
 
-| Component | Planned source | Status |
-|-----------|---------------|--------|
-| SIMD Distance (AVX2/NEON/portable_simd) | `src/simd/` | not started |
+| Component | Source | Doc file | Status |
+|-----------|--------|----------|--------|
+| SIMD Distance (AVX2/NEON/portable_simd) | `src/simd/` | `docs/components/distance.md` | documented |
 
-## Phase 4 (Planned — Pile → Organized)
+## Phase 4 (Complete — Pile → Organized)
 
-| Component | Planned source | Status |
-|-----------|---------------|--------|
-| Collections (multi-namespace) | `src/store/` | not started |
-| Metadata Filtering | `src/index/` | not started |
+| Component | Source | Doc file | Status |
+|-----------|--------|----------|--------|
+| Collections (multi-namespace) | `src/store/collections.rs` | inline in mcp-server.md | documented |
+| Metadata Filtering | `src/index/brute.rs` (`filter` param on `search`) | `docs/components/brute-force.md` | documented |
 
-## Phase 5 (Planned — O(n) → O(log n))
+## Phase 5 (Complete — O(n) → O(log n))
 
-| Component | Planned source | Status |
-|-----------|---------------|--------|
-| KD-Tree Index | `src/index/kdtree.rs` | not started |
+| Component | Source | Doc file | Status |
+|-----------|--------|----------|--------|
+| KD-Tree Index | `src/index/kdtree.rs` | `docs/components/kdtree.md` | documented |
+| `BoundedMaxHeap::peek_worst` (pruning support) | `src/heap/mod.rs` | `docs/components/kdtree.md` ("Heap Extension" section) | documented |
+| `should_use_kdtree` heuristic | `src/index/kdtree.rs` | `docs/components/kdtree.md` ("When to use vs BruteForce" section) | documented |
 
 ## Coverage Notes
 

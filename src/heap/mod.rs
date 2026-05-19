@@ -81,6 +81,17 @@ impl BoundedMaxHeap {
     pub fn is_empty(&self) -> bool {
         self.heap.is_empty()
     }
+
+    /// Returns the current worst (largest) score in the heap, or `None` if
+    /// the heap is empty. O(1).
+    ///
+    /// Used by KD-Tree search to derive its geometric pruning radius — when
+    /// the heap is full of K accepted candidates, the largest score in the
+    /// heap is the radius beyond which any new candidate could not improve
+    /// the result set.
+    pub fn peek_worst(&self) -> Option<f32> {
+        self.heap.peek().map(|item| item.score)
+    }
 }
 
 #[cfg(test)]
@@ -129,6 +140,25 @@ mod tests {
         heap.push(1.0, 2);
         heap.push(1.0, 3);
         assert_eq!(heap.len(), 2);
+    }
+
+    #[test]
+    fn peek_worst_returns_largest_score_when_full() {
+        let mut heap = BoundedMaxHeap::new(3);
+        heap.push(1.0, 1);
+        heap.push(0.5, 2);
+        heap.push(2.0, 3);
+        // Worst (largest, since we keep K smallest) of {0.5, 1.0, 2.0} is 2.0.
+        assert_eq!(heap.peek_worst(), Some(2.0));
+        // Pushing a better (smaller) score evicts 2.0, so worst becomes 1.0.
+        heap.push(0.1, 4);
+        assert_eq!(heap.peek_worst(), Some(1.0));
+    }
+
+    #[test]
+    fn peek_worst_empty_heap_returns_none() {
+        let heap = BoundedMaxHeap::new(3);
+        assert_eq!(heap.peek_worst(), None);
     }
 
     #[test]

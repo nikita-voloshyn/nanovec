@@ -136,8 +136,8 @@ Deliverables:
 |-------|--------|
 | Phase 1 — Zero → Working | ✅ Complete |
 | Phase 2 — Vectors → Text | ✅ Complete |
-| Phase 3 — Scalar → SIMD | ⬜ Next |
-| Phase 4 — Pile → Organized | ⬜ Planned |
-| Phase 5 — O(n) → O(log n) | ⬜ Planned |
-| Phase 6 — Single → Multi-agent | ⬜ Planned |
+| Phase 3 — Scalar → SIMD | ✅ Complete |
+| Phase 4 — Pile → Organized | ✅ Complete |
+| Phase 5 — O(n) → O(log n) | ✅ Complete |
+| Phase 6 — Single → Multi-agent | ⬜ Next |
 | Phase 7 — Exact → Approximate | ⬜ Stretch |

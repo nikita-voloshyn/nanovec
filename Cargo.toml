@@ -55,3 +55,7 @@ harness = false
 [[bench]]
 name = "heap"
 harness = false
+
+[[bench]]
+name = "kdtree"
+harness = false
