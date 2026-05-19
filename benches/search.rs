@@ -62,6 +62,7 @@ fn bench_search(c: &mut Criterion) {
                                 black_box(&query),
                                 k,
                                 metric,
+                                None,
                             )
                         });
                     },

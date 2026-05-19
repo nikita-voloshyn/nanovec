@@ -1,3 +1,4 @@
+pub mod collections;
 pub mod record;
 
 /// Error types for VectorStore operations.

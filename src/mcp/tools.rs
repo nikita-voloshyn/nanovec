@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rmcp::schemars;
 use serde::Deserialize;
 
@@ -10,6 +12,9 @@ pub struct IndexVectorParams {
     pub vector: Vec<f32>,
     /// Optional key-value metadata pairs.
     pub metadata: Option<serde_json::Value>,
+    /// Optional collection name. Defaults to `"default"` (auto-created on
+    /// first access).
+    pub collection: Option<String>,
 }
 
 /// Parameters for the `index_document` tool.
@@ -19,6 +24,10 @@ pub struct IndexDocumentParams {
     pub text: String,
     /// Optional key-value metadata pairs.
     pub metadata: Option<serde_json::Value>,
+    /// Optional collection name. Defaults to `"default"` (auto-created on
+    /// first access). The collection's dimension must match the embedder
+    /// output (384) or the call errors.
+    pub collection: Option<String>,
 }
 
 /// Parameters for the `search` tool.
@@ -30,6 +39,11 @@ pub struct SearchParams {
     pub k: usize,
     /// Distance metric: "euclidean", "cosine", or "dot". Defaults to the server default.
     pub metric: Option<String>,
+    /// Optional metadata filter — only records whose metadata contains
+    /// **all** of these `(key, value)` pairs are considered.
+    pub filter: Option<HashMap<String, String>>,
+    /// Optional collection name. Defaults to `"default"`.
+    pub collection: Option<String>,
 }
 
 /// Parameters for the `search_document` tool.
@@ -43,6 +57,11 @@ pub struct SearchDocumentParams {
     /// for the embedded path (model output is L2-normalized so cosine is
     /// equivalent to dot, but cosine reads more clearly to the API consumer).
     pub metric: Option<String>,
+    /// Optional metadata filter — only records whose metadata contains
+    /// **all** of these `(key, value)` pairs are considered.
+    pub filter: Option<HashMap<String, String>>,
+    /// Optional collection name. Defaults to `"default"`.
+    pub collection: Option<String>,
 }
 
 /// Parameters for the `delete` tool.
@@ -50,4 +69,30 @@ pub struct SearchDocumentParams {
 pub struct DeleteParams {
     /// The ID of the document to delete.
     pub id: u64,
+    /// Optional collection name. Defaults to `"default"`.
+    pub collection: Option<String>,
+}
+
+/// Parameters for the `clear` tool.
+#[derive(Deserialize, schemars::JsonSchema, Default)]
+pub struct ClearParams {
+    /// Optional collection name. Defaults to `"default"`. Clears one
+    /// collection only; does NOT drop the collection.
+    pub collection: Option<String>,
+}
+
+/// Parameters for the `create_collection` tool.
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct CreateCollectionParams {
+    /// The name of the collection to create.
+    pub name: String,
+    /// The vector dimension this collection is locked to.
+    pub dimension: usize,
+}
+
+/// Parameters for the `drop_collection` tool.
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct DropCollectionParams {
+    /// The name of the collection to drop.
+    pub name: String,
 }
