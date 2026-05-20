@@ -245,7 +245,7 @@
   <h1>NanoVec<span class="dot">.</span></h1>
   <div class="sub">In-memory wektorowa baza danych w czystym Rust<br>jako serwer MCP dla pamięci roboczej agentów AI</div>
   <div class="meta">
-    v0.1.0 · Phase 1–5 ukończone, Phase 6 (core) zrealizowana<br>
+    v0.1.0 · Phase 1–6 ukończone (stdio + HTTP + multi-agent)<br>
     2026-05-20 · Nikita Voloshyn
   </div>
 </section>
@@ -327,11 +327,11 @@
   <h2>Sześć faz — od pustego repo do produktu</h2>
 
   <div class="stats">
-    <div class="stat"><div class="v">6/7</div><div class="l">Faz (core) ukończonych</div></div>
-    <div class="stat"><div class="v">~3800</div><div class="l">Linii Rust</div></div>
+    <div class="stat"><div class="v">6/7</div><div class="l">Faz ukończonych</div></div>
+    <div class="stat"><div class="v">~4500</div><div class="l">Linii Rust</div></div>
     <div class="stat"><div class="v">9.3×</div><div class="l">Speedup SIMD (dot)</div></div>
     <div class="stat"><div class="v">6.97×</div><div class="l">Multi-thread (8t)</div></div>
-    <div class="stat"><div class="v">&lt; 1ms</div><div class="l">Top-K po 10k</div></div>
+    <div class="stat"><div class="v">111</div><div class="l">Tests passing</div></div>
     <div class="stat"><div class="v">11</div><div class="l">Narzędzi MCP</div></div>
   </div>
 
@@ -347,7 +347,7 @@
         <tr><td class="label">Phase 3</td><td>Skalar → SIMD</td><td>AVX2 (x86_64) + NEON (Apple Silicon) + portable SIMD, runtime dispatch, proptest</td><td><span class="pill done">done</span></td></tr>
         <tr><td class="label">Phase 4</td><td>Kupa → Struktura</td><td>Nazwane kolekcje, filtrowanie po metadanych, multi-tenant w jednym procesie</td><td><span class="pill done">done</span></td></tr>
         <tr><td class="label">Phase 5</td><td>O(n) → O(log n)</td><td>KD-Tree z geometric pruning, auto-select brute-force vs KD-Tree po dim</td><td><span class="pill done">done</span></td></tr>
-        <tr><td class="label">Phase 6</td><td>Single → Multi-agent</td><td><code>NanoVecDatabase</code> + 2-poziomowy RwLock (parking_lot), budżet pamięci + LRU eviction, pinned <code>default</code> / <code>_conn_*</code>, nowy <code>memory</code> tool. <em>SSE odłożony.</em></td><td><span class="pill done">done (core)</span></td></tr>
+        <tr><td class="label">Phase 6</td><td>Single → Multi-agent</td><td><code>NanoVecDatabase</code> + 2-poziomowy RwLock (parking_lot), budżet pamięci + LRU eviction, pinned <code>default</code> / <code>_conn_*</code>, <code>memory</code> tool, <strong>streamable HTTP transport (axum)</strong>, <code>connection_id</code> dla multi-tenant.</td><td><span class="pill done">done</span></td></tr>
         <tr><td class="label">Phase 7</td><td>Exact → ANN (HNSW)</td><td>HNSW od zera dla 384-dim, porównanie z Qdrant</td><td><span class="pill next">stretch</span></td></tr>
       </tbody>
     </table>
@@ -618,30 +618,29 @@ user msg ──►  <span class="hl3">[ ładuje MEMORY.md          ]</span>     
 <!-- ============== SLIDE 12: PHASE 6 ============== -->
 <section class="slide">
   <span class="slide-num">12 / 15</span>
-  <span class="slide-tag">Phase 6 — zrealizowano</span>
-  <h2>Single → Multi-agent (core gotowy)</h2>
+  <span class="slide-tag">Phase 6 — w pełni gotowy</span>
+  <h2>Single → Multi-agent</h2>
 
   <p class="lede">
-    Phase 6 trafiła z planu w kod. <strong>Dwa-poziomowy RwLock</strong>,
-    <strong>budżet pamięci z LRU-eviction</strong> i <strong>connection-scoped pinned collections</strong>
-    są zaimplementowane i przetestowane. SSE transport pozostaje na potem.
+    Cała Phase 6 trafiła z planu w kod: <strong>dwa-poziomowy RwLock</strong>,
+    <strong>budżet pamięci + LRU eviction</strong>, <strong>streamable HTTP transport</strong>
+    (axum + rmcp) i <strong>per-connection isolation</strong> dla multi-tenant.
   </p>
 
   <div class="cols-2">
     <div>
-      <h3>Zaimplementowane</h3>
+      <h3>Co wjechało w jednej sesji</h3>
       <ul>
         <li><code>NanoVecDatabase</code> z <code>RwLock&lt;HashMap&lt;String, Arc&lt;RwLock&lt;Collection&gt;&gt;&gt;&gt;</code> (parking_lot)</li>
-        <li>Outer write tylko dla <code>create_collection</code> / <code>drop_collection</code> — reszta read</li>
-        <li>Per-collection writer nie blokuje searcha na innych kolekcjach</li>
-        <li><code>NANOVEC_MEMORY_LIMIT_MB</code> (default 512) + <code>approx_bytes()</code> per collection</li>
-        <li>LRU tick (AtomicU64) + <code>evict_until_under_budget()</code></li>
-        <li>Pinned: <code>default</code> + <code>_conn_*</code> nigdy nie są wyrzucane</li>
-        <li>Nowe MCP tooly: rozszerzony <code>stats</code> + <code>memory</code> (per-collection breakdown)</li>
+        <li><code>NANOVEC_MEMORY_LIMIT_MB</code> + per-collection <code>approx_bytes</code> + LRU tick + <code>evict_until_under_budget</code></li>
+        <li>Pinned: <code>default</code> + <code>_conn_*</code> nigdy nie wyrzucane</li>
+        <li>Nowy tool <code>memory</code> + rozszerzony <code>stats</code></li>
+        <li><strong>NANOVEC_SSE_ADDR</strong> env -> streamable HTTP na <code>/mcp</code> przez axum</li>
+        <li><code>connection_id</code> w params -> kolekcja <code>_conn_&lt;id&gt;</code> (multi-tenant)</li>
       </ul>
     </div>
     <div>
-      <h3>Realne pomiary (6 testów concurrency, release build)</h3>
+      <h3>Realne pomiary — 12 testów integracyjnych</h3>
       <div class="table-wrap">
         <table>
           <thead><tr><th>Scenariusz</th><th>1 thread</th><th>8 threads</th><th>Speedup</th></tr></thead>
@@ -652,18 +651,17 @@ user msg ──►  <span class="hl3">[ ładuje MEMORY.md          ]</span>     
         </table>
       </div>
       <p style="font-size:13px;color:var(--muted)">
-        Test <em>write_isolation</em>: podczas 20 ms write-locka na kolekcji A,
-        wątek-czytelnik wykonał <strong>148 searchów</strong> na kolekcji B.
-        Cel z planu (≥ 6× scaling przy 8 wątkach) — osiągnięty ✓.
+        E2E HTTP test: dwóch klientów reqwest, każdy ze swoim <code>connection_id</code>,
+        widzi <strong>wyłącznie swoje dane</strong>. Stats / memory tools działają przez HTTP.
+        Wszystkie 99 unit + 12 integration testów zielonych; clippy + fmt clean.
       </p>
     </div>
   </div>
 
-  <h3>Nie zrobione w tej iteracji (świadomie odłożone)</h3>
-  <ul>
-    <li><strong>SSE transport</strong> (axum) — przynosi ~150 transitive deps; opt-in, zostawione na osobny PR</li>
-    <li><strong>Connection manager przez <code>_meta.connection_id</code></strong> — wymaga zmiany kontraktu MCP, czeka na rmcp upgrade</li>
-  </ul>
+  <h3>Wybór transportu — proste env</h3>
+  <div class="ascii"><span class="hl">$ nanovec</span>                                          <span class="hl3"># stdio (Phase 1-5 default)</span>
+<span class="hl">$ NANOVEC_SSE_ADDR=127.0.0.1:8421 nanovec</span>          <span class="hl3"># streamable HTTP at /mcp</span>
+<span class="hl">$ NANOVEC_MEMORY_LIMIT_MB=128 nanovec</span>              <span class="hl3"># tighter budget for sandbox</span></div>
 </section>
 
 <!-- ============== SLIDE 13: PHASE 7 ============== -->
@@ -799,11 +797,11 @@ user msg ──►  <span class="hl3">[ ładuje MEMORY.md          ]</span>     
 
   <h3>Roadmap — co dalej</h3>
   <ul>
-    <li><strong>Phase 6 core</strong> ✅ — dwa-poziomowy RwLock, memory budget, LRU eviction zrobione i przetestowane (6 testów concurrency).</li>
-    <li><strong>Phase 6 reszta</strong> — SSE transport (axum) + connection manager przez <code>_meta</code>. Osobny PR, ~150 zależności.</li>
-    <li><strong>Phase 7 — HNSW</strong> (stretch). Wymaga osobnej sesji: ~1500 linii, recall sweep, porównanie z Qdrant. Plan i dispatch są napisane (<code>docs/plans/phase-7-hnsw-*.md</code>) ale kod jeszcze nie istnieje.</li>
-    <li>Wymiana embeddera na <code>bge-m3</code> lub <code>multilingual-e5</code> dla realnego multi-language.</li>
+    <li><strong>Phase 6 ✅</strong> — w pełni zamknięta: RwLock + budget + LRU + HTTP transport + connection_id. 12 testów integracyjnych zielonych (6 concurrency + 2 HTTP e2e + 4 stdio).</li>
+    <li><strong>Phase 7 — HNSW</strong> (stretch). Wymaga osobnej sesji: ~1500 linii, recall sweep na 36 punktach (M × ef), porównanie z Qdrant. Plan i dispatch są napisane (<code>docs/plans/phase-7-hnsw-*.md</code>) ale kod jeszcze nie istnieje.</li>
+    <li>Wymiana embeddera na <code>bge-m3</code> lub <code>multilingual-e5</code> dla realnego multi-language (przerzucenie z 0% cross-lingual recall na właściwe wartości).</li>
     <li>Eksperyment: <strong>hybryda</strong> — pamięć Claude + NanoVec na tych samych danych, porównanie jakości odpowiedzi.</li>
+    <li>Persystencja (snapshot/restore) — naruszałoby „ephemeral by design", ale potencjalnie zasadne dla długo-trwających agent sessions.</li>
   </ul>
 
   <div class="callout" style="margin-top:24px">
