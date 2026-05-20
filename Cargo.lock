@@ -1708,6 +1708,7 @@ dependencies = [
  "divan",
  "hf-hub",
  "once_cell",
+ "parking_lot",
  "proptest",
  "rmcp",
  "serde",

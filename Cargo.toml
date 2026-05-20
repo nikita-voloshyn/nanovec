@@ -30,6 +30,9 @@ tokenizers = { version = "0.23", default-features = false, features = ["onig"] }
 hf-hub = { version = "0.5", default-features = false, features = ["ureq", "default-tls"] }
 once_cell = "1"
 
+# Phase 6 — multi-agent concurrency.
+parking_lot = "0.12"
+
 [dev-dependencies]
 proptest = "1"
 approx = "0.5"
@@ -58,4 +61,8 @@ harness = false
 
 [[bench]]
 name = "kdtree"
+harness = false
+
+[[bench]]
+name = "simd_vs_scalar"
 harness = false

@@ -1,3 +1,4 @@
+mod concurrency;
 mod mcp_collections;
 mod mcp_embedding;
 mod mcp_phase25;
