@@ -45,6 +45,10 @@ criterion = { version = "0.5", features = ["html_reports"] }
 divan = "0.1"
 # Phase 6 T9 — HTTP integration test client.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Phase 7 follow-up — external HNSW reference for apples-to-apples comparison.
+# instant-distance is a pure-Rust from-scratch HNSW (same paper, same algorithm),
+# so the comparison measures implementation quality rather than network latency.
+instant-distance = "0.6"
 
 [[bench]]
 name = "distance"
@@ -76,4 +80,8 @@ harness = false
 
 [[bench]]
 name = "hnsw_sweep"
+harness = false
+
+[[bench]]
+name = "hnsw_compare"
 harness = false

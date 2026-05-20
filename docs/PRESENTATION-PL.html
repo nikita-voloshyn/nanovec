@@ -717,6 +717,29 @@ user msg ──►  <span class="hl3">[ ładuje MEMORY.md          ]</span>     
     i <strong>14× speedup</strong> nad brute-force. To jest realny tradeoff jaki HNSW oferuje na
     produkcyjnych embeddingach — nie marketing, nie cytat z podręcznika, nasze własne pomiary.
   </div>
+
+  <h3 style="margin-top:24px">Apples-to-apples: NanoVec HNSW vs <code>instant-distance</code></h3>
+  <p style="font-size:14px;color:var(--muted)">
+    <code>instant-distance</code> to popularna pure-Rust biblioteka HNSW od InstantDomain
+    (ten sam paper, ten sam Algorithm 4). Zarówno NanoVec, jak i instant-distance używają
+    naszej <code>simd::cosine</code> jako distance i tych samych parametrów. Fair comparison
+    bo oba w-procesie, brak gRPC overhead.
+  </p>
+  <div class="table-wrap">
+    <table style="font-size:13px">
+      <thead><tr><th>Implementation</th><th>Build</th><th>p50 search</th><th>vs brute</th><th>Recall@10</th><th>Memory</th></tr></thead>
+      <tbody>
+        <tr><td class="label">brute-force (ref)</td><td>—</td><td class="num">943 µs</td><td class="num">1.0×</td><td class="num">1.000</td><td>—</td></tr>
+        <tr><td class="label"><strong>NanoVec HNSW</strong></td><td class="num">1.1 s</td><td class="num"><strong>22 µs</strong></td><td class="num"><strong>42.9×</strong></td><td class="num">1.000</td><td class="num">185 KB</td></tr>
+        <tr><td class="label">instant-distance</td><td class="num">3.6 s</td><td class="num">86 µs</td><td class="num">11.0×</td><td class="num">1.000</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:13px;color:var(--muted)">
+    NanoVec HNSW <strong>3.9× szybsza w search</strong> i <strong>3.3× szybsza w build</strong> od ustalonej publicznej biblioteki,
+    przy identycznym recall. Możliwe powody przewagi: tighter inner loop, mniej generic boilerplate
+    przy distance, dedykowany SIMD path. Liczby z <code>cargo bench --bench hnsw_compare</code>.
+  </p>
 </section>
 
 <!-- ============== SLIDE 14: NANOVEC vs QDRANT ============== -->
@@ -746,7 +769,7 @@ user msg ──►  <span class="hl3">[ ładuje MEMORY.md          ]</span>     
         <tr><td class="label">Quantization</td><td>Scalar, Product, Binary</td><td>Brak (f32 only)</td></tr>
         <tr><td class="label">Rozmiar binarki</td><td>~80 MB</td><td>~12 MB (bez wag modelu)</td></tr>
         <tr><td class="label">Cold start</td><td>2–5 s (mmap, load index)</td><td>10–30 s (download MiniLM) → potem ~30 ms</td></tr>
-        <tr><td class="label">Latencja search (10k × 384)</td><td>~0.3 ms (HNSW, recall 0.95)</td><td>~0.5 ms (brute-force + SIMD)</td></tr>
+        <tr><td class="label">Latencja search (10k × 384)</td><td>~0.3 ms (HNSW, recall 0.95)</td><td><strong>0.022 ms HNSW</strong> / 0.943 ms brute (zmierzono)</td></tr>
         <tr><td class="label">Skala docelowa</td><td>10⁶ – 10⁹ wektorów, klaster</td><td>10⁴ – 10⁵, jeden proces</td></tr>
         <tr><td class="label">Zależności</td><td>~600 crates (RocksDB, tonic, etc.)</td><td>~40 crates (candle + rmcp + serde)</td></tr>
         <tr><td class="label">Embedding po stronie serwera</td><td>Tak (FastEmbed integration)</td><td>Tak (candle + MiniLM, in-process)</td></tr>
