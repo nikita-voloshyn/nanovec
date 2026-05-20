@@ -49,10 +49,31 @@
 | `BoundedMaxHeap::peek_worst` (pruning support) | `src/heap/mod.rs` | `docs/components/kdtree.md` ("Heap Extension" section) | documented |
 | `should_use_kdtree` heuristic | `src/index/kdtree.rs` | `docs/components/kdtree.md` ("When to use vs BruteForce" section) | documented |
 
+## Phase 6 (Complete — Single → Multi-agent)
+
+| Component | Source | Doc file | Status |
+|-----------|--------|----------|--------|
+| NanoVecDatabase (two-level RwLock, budget, LRU) | `src/store/database.rs` | `docs/components/database.md` | documented |
+| Memory budget + per-collection LRU eviction | `src/store/database.rs` | `docs/components/database.md` ("Budget" + "LRU tick" sections) | documented |
+| Pinned collections (`default`, `_conn_*`) | `src/store/database.rs` | `docs/components/database.md` ("Pinned collections" section) | documented |
+| Streamable HTTP transport (axum + rmcp) | `src/transport/http.rs`, `src/transport/mod.rs` | `docs/components/transport-http.md` | documented |
+| `connection_id` field on every tool param | `src/mcp/tools.rs`, `src/mcp/mod.rs` | `docs/components/transport-http.md` ("Connection isolation" section) | documented |
+| `memory` MCP tool + extended `stats` (memory block) | `src/mcp/mod.rs` | `docs/components/database.md` + `docs/components/mcp-server.md` | documented |
+
+## Phase 7 (Complete — Exact → Approximate)
+
+| Component | Source | Doc file | Status |
+|-----------|--------|----------|--------|
+| HNSW from scratch (Malkov & Yashunin Algorithm 4 heuristic) | `src/index/hnsw.rs` | `docs/components/hnsw.md` | documented |
+| `Collection.hnsw: Option<Hnsw>` + auto-invalidation on mutation | `src/store/collections.rs`, `src/mcp/mod.rs` | `docs/components/hnsw.md` ("Index lifecycle" section) | documented |
+| `rebuild_index` MCP tool | `src/mcp/mod.rs`, `src/mcp/tools.rs` | `docs/components/hnsw.md` ("MCP tool" section) | documented |
+| HNSW search dispatch (cosine only; fallback to brute on metric mismatch) | `src/mcp/mod.rs` | `docs/components/hnsw.md` ("Trade-offs" section) | documented |
+| Real-corpus recall sweep | `tests/integration/hnsw_stress.rs`, `benches/hnsw_sweep.rs` | `docs/components/hnsw.md` ("Measured Performance" section) | documented |
+
 ## Coverage Notes
 
-- All Phase 1 and Phase 2 public modules have corresponding component documentation files.
-- Doc comments (`///`) exist on all public items in Phase 1 and Phase 2 source.
-- No benchmark results are available yet; performance claims in current docs describe algorithmic complexity only. Benchmark evidence will be added after Phase 3 SIMD work and `cargo bench` runs are recorded.
-- Integration tests in `tests/` exercise the MCP server end-to-end; both tests are summarized in `docs/components/mcp-server.md`.
-- Phase 2 Embedder tests require HuggingFace model cache or internet access; see `docs/components/embed.md` for caching details.
+- All Phase 1–7 public modules have corresponding component documentation files.
+- Doc comments (`///`) exist on all public items.
+- Benchmark numbers from `cargo bench` and `cargo test ... --ignored` runs on Apple Silicon (NEON) are captured inline in the Phase 3 (SIMD), Phase 5 (KD-Tree), Phase 6 (concurrency), and Phase 7 (HNSW recall sweep) docs.
+- Integration tests in `tests/integration/` cover: MCP stdio (4), concurrency + LRU (6), streamable HTTP e2e (2), HNSW recall + filter (4), rebuild_index (2), real-corpus stress (2, `#[ignore]`). Total 18 integration + 104 unit tests passing.
+- Real-corpus tests (`hnsw_real_corpus`, `hnsw_stress`) require the HuggingFace model cache (90 MB cold) and take 10s–8m to run, so they're `#[ignore]`'d. Numbers from those runs feed into `docs/components/hnsw.md`.

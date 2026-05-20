@@ -33,6 +33,10 @@ Files in [`components/`](components/). All component docs are written in English
 | [`components/brute-force.md`](components/brute-force.md) | Bounded max-heap and brute-force KNN linear scan. | Обмежений max-heap і brute-force KNN лінійним скануванням. |
 | [`components/embed.md`](components/embed.md) | candle loader for `all-MiniLM-L6-v2`, mean-pool + L2-normalize pipeline. | Завантажувач `all-MiniLM-L6-v2` на candle, pipeline mean-pool + L2-нормалізації. |
 | [`components/mcp-server.md`](components/mcp-server.md) | rmcp tool definitions, stdio transport, embedder warmup, dimension lock. | Визначення інструментів rmcp, stdio-транспорт, прогрів ембеддера, фіксація розмірності. |
+| [`components/kdtree.md`](components/kdtree.md) | KD-Tree spatial index for low-dim search; auto-fallback to brute at high dim. | KD-Tree просторовий індекс для низької розмірності; автоматичний fallback на brute. |
+| [`components/database.md`](components/database.md) | Phase 6: two-level RwLock, memory budget, LRU eviction, pinned `default` / `_conn_*` collections. | Phase 6: двохрівневий RwLock, бюджет пам'яті, LRU eviction, pinned-кэлекції. |
+| [`components/transport-http.md`](components/transport-http.md) | Phase 6: streamable HTTP transport via axum + rmcp, `NANOVEC_SSE_ADDR`, `connection_id` for multi-tenant. | Phase 6: streamable HTTP-транспорт через axum + rmcp, `NANOVEC_SSE_ADDR`, ізоляція через `connection_id`. |
+| [`components/hnsw.md`](components/hnsw.md) | Phase 7: HNSW from scratch (Malkov & Yashunin Algorithm 4 heuristic), `rebuild_index` MCP tool, recall sweep. | Phase 7: HNSW з нуля (евристика Algorithm 4), MCP-інструмент `rebuild_index`, sweep recall. |
 
 ## Plans / Плани
 
