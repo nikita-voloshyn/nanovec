@@ -1,6 +1,7 @@
 mod concurrency;
 mod hnsw_real_corpus;
 mod hnsw_recall;
+mod hnsw_stress;
 mod http_e2e;
 mod mcp_collections;
 mod mcp_embedding;
