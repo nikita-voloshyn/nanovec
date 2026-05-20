@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NanoVec — Podsumowanie projektu</title>
+<style>
+  :root {
+    --bg: #0e0e10;
+    --panel: #16161a;
+    --panel-2: #1d1d22;
+    --border: #2a2a30;
+    --text: #e6e6ea;
+    --muted: #9a9aa3;
+    --accent: #ff8a3d;
+    --accent-2: #4ecdc4;
+    --green: #7bd88f;
+    --yellow: #f7d76a;
+    --red: #ff6b6b;
+    --purple: #b388ff;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    letter-spacing: 0.005em;
+  }
+
+  /* Slide container */
+  .deck { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .slide {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 48px 56px;
+    margin: 24px 0;
+    min-height: 600px;
+    position: relative;
+    page-break-after: always;
+  }
+  .slide-num {
+    position: absolute;
+    top: 16px;
+    right: 24px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .slide-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 3px 10px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+  }
+  .slide h1 {
+    font-size: 56px;
+    font-weight: 700;
+    margin: 0 0 16px;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+  }
+  .slide h1 .dot { color: var(--accent); }
+  .slide h2 {
+    font-size: 36px;
+    font-weight: 700;
+    margin: 0 0 24px;
+    letter-spacing: -0.015em;
+    line-height: 1.1;
+  }
+  .slide h3 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 24px 0 12px;
+    color: var(--text);
+  }
+  .slide p { margin: 0 0 14px; font-size: 17px; }
+  .slide ul { margin: 0 0 16px; padding-left: 22px; }
+  .slide li { margin: 6px 0; font-size: 17px; }
+  .slide .lede {
+    font-size: 22px;
+    color: var(--muted);
+    max-width: 900px;
+    margin: 0 0 28px;
+    line-height: 1.45;
+  }
+
+  code { font-family: var(--mono); font-size: 14px; background: var(--panel-2); padding: 2px 7px; border-radius: 4px; color: var(--accent-2); }
+
+  /* Title slide */
+  .title {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 640px;
+  }
+  .title h1 { font-size: 88px; }
+  .title .sub { font-size: 24px; color: var(--muted); margin-top: 12px; }
+  .title .meta { margin-top: 48px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+
+  /* Stats grid */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+    margin: 24px 0;
+  }
+  .stat {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+  }
+  .stat .v { font-family: var(--mono); font-size: 28px; font-weight: 600; color: var(--accent); }
+  .stat .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px; }
+
+  /* Two-column */
+  .cols-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 16px 0; }
+  @media (max-width: 900px) { .cols-2 { grid-template-columns: 1fr; } }
+
+  /* Comparison card */
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 28px;
+  }
+  .card.claude { border-top: 3px solid var(--purple); }
+  .card.nanovec { border-top: 3px solid var(--accent); }
+  .card h3 { margin-top: 0; font-size: 22px; }
+  .card .label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 6px; }
+  .card .label.claude { color: var(--purple); }
+  .card .label.nano { color: var(--accent); }
+
+  .pros li::before { content: "+ "; color: var(--green); font-weight: 700; }
+  .cons li::before { content: "− "; color: var(--red); font-weight: 700; }
+  .pros, .cons { list-style: none; padding-left: 0; }
+
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  th {
+    background: var(--panel-2);
+    color: var(--muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  td.num { font-family: var(--mono); color: var(--accent-2); text-align: right; }
+  td.label { color: var(--text); font-weight: 500; }
+  .table-wrap {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin: 16px 0;
+  }
+  .table-wrap table { margin: 0; }
+
+  /* Pills */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-family: var(--mono);
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .pill.done { color: var(--green); border-color: rgba(123, 216, 143, 0.35); }
+  .pill.next { color: var(--yellow); border-color: rgba(247, 215, 106, 0.35); }
+  .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Diagram */
+  .ascii {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 22px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.45;
+    overflow-x: auto;
+    color: var(--muted);
+    white-space: pre;
+    margin: 16px 0;
+  }
+  .ascii .hl { color: var(--accent); }
+  .ascii .hl2 { color: var(--accent-2); }
+  .ascii .hl3 { color: var(--purple); }
+
+  /* Callout */
+  .callout {
+    background: rgba(78, 205, 196, 0.07);
+    border: 1px solid rgba(78, 205, 196, 0.3);
+    border-radius: 8px;
+    padding: 16px 22px;
+    margin: 20px 0;
+  }
+  .callout strong { color: var(--accent-2); }
+  .warn {
+    background: rgba(247, 215, 106, 0.06);
+    border: 1px solid rgba(247, 215, 106, 0.3);
+    border-radius: 8px;
+    padding: 16px 22px;
+    margin: 20px 0;
+  }
+  .warn strong { color: var(--yellow); }
+
+  /* Print */
+  @media print {
+    body { background: white; color: black; }
+    .slide { page-break-after: always; border: none; background: white; color: black; box-shadow: none; }
+    .stat, .card, .ascii, .table-wrap { background: #f7f7f9; }
+  }
+</style>
+</head>
+<body>
+<div class="deck">
+
+<!-- ============== SLIDE 1: TITLE ============== -->
+<section class="slide title">
+  <span class="slide-num">1 / 15</span>
+  <span class="slide-tag">Podsumowanie projektu</span>
+  <h1>NanoVec<span class="dot">.</span></h1>
+  <div class="sub">In-memory wektorowa baza danych w czystym Rust<br>jako serwer MCP dla pamięci roboczej agentów AI</div>
+  <div class="meta">
+    v0.1.0 · Phase 1–5 ukończone, Phase 6 (core) zrealizowana<br>
+    2026-05-20 · Nikita Voloshyn
+  </div>
+</section>
+
+<!-- ============== SLIDE 2: PROBLEM ============== -->
+<section class="slide">
+  <span class="slide-num">2 / 15</span>
+  <span class="slide-tag">Problem</span>
+  <h2>Po co agentowi LLM zewnętrzna pamięć?</h2>
+  <p class="lede">
+    Claude (i każdy inny model językowy) ma <strong>okno kontekstu</strong> — pamięta tylko to,
+    co znajduje się w bieżącej rozmowie. Po jej zakończeniu wszystko znika.
+  </p>
+
+  <div class="cols-2">
+    <div class="card">
+      <div class="label">Ograniczenia okna kontekstu</div>
+      <ul>
+        <li>1M tokenów to dużo, ale skończone i drogie</li>
+        <li>Każdy token kosztuje pieniądze przy każdym zapytaniu</li>
+        <li>Im dłuższy kontekst, tym wolniejsza odpowiedź</li>
+        <li>Po restarcie sesji — wszystko przepadło</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="label">Czego potrzebuje agent</div>
+      <ul>
+        <li>Zapamiętać fakty <em>między</em> sesjami</li>
+        <li>Wyszukiwać po znaczeniu, nie po słowach kluczowych</li>
+        <li>Tanio — bez wysyłania całej historii do modelu</li>
+        <li>Szybko — &lt; 1 ms na zapytanie</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Pomysł:</strong> dać Claude osobny „magazyn pamięci" — wektorową bazę danych dostępną przez protokół MCP.
+    Agent sam decyduje, co zapisać i co przywołać.
+  </div>
+</section>
+
+<!-- ============== SLIDE 3: CO TO JEST ============== -->
+<section class="slide">
+  <span class="slide-num">3 / 15</span>
+  <span class="slide-tag">Czym jest NanoVec</span>
+  <h2>Wektorowa baza zbudowana od zera</h2>
+
+  <div class="cols-2">
+    <div>
+      <h3>Zasady projektowe</h3>
+      <ul>
+        <li><strong>Zero zewnętrznych bibliotek indeksowania</strong> — bez FAISS, HNSWLIB, Annoy</li>
+        <li><strong>Pure Rust</strong> — bez Pythona, bez ONNX, bez C++</li>
+        <li><strong>In-memory</strong> — żadnej persystencji, żadnego WAL</li>
+        <li><strong>MCP jako jedyny interfejs</strong> — brak REST/gRPC</li>
+        <li><strong>SoA layout</strong> — wektory jako płaski <code>Vec&lt;f32&gt;</code></li>
+        <li><strong>SIMD wszędzie</strong> — AVX2 + NEON + scalar fallback</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Po co takie ograniczenia?</h3>
+      <p>
+        Każde zewnętrzne narzędzie to <em>czarna skrzynka</em>. Pisząc wszystko samodzielnie,
+        rozumiemy każdy kompromis: dlaczego KD-Tree przestaje działać przy 384 wymiarach,
+        ile naprawdę daje SIMD, jak zachowuje się embedder na trzech językach.
+      </p>
+      <p>
+        Efekt: 0 MB zależności indeksowania, ~90 MB tylko na wagi modelu embeddingowego,
+        binarka mieści się na kontenerze scratch.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============== SLIDE 4: CO ZBUDOWANE ============== -->
+<section class="slide">
+  <span class="slide-num">4 / 15</span>
+  <span class="slide-tag">Co zrobiliśmy</span>
+  <h2>Sześć faz — od pustego repo do produktu</h2>
+
+  <div class="stats">
+    <div class="stat"><div class="v">6/7</div><div class="l">Faz (core) ukończonych</div></div>
+    <div class="stat"><div class="v">~3800</div><div class="l">Linii Rust</div></div>
+    <div class="stat"><div class="v">9.3×</div><div class="l">Speedup SIMD (dot)</div></div>
+    <div class="stat"><div class="v">6.97×</div><div class="l">Multi-thread (8t)</div></div>
+    <div class="stat"><div class="v">&lt; 1ms</div><div class="l">Top-K po 10k</div></div>
+    <div class="stat"><div class="v">11</div><div class="l">Narzędzi MCP</div></div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Faza</th><th>Transformacja</th><th>Główne dostarczone elementy</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="label">Phase 1</td><td>Zero → Działający MVP</td><td>VectorStore (SoA), RecordStore, dystanse skalarne, brute-force KNN, MCP stdio</td><td><span class="pill done">done</span></td></tr>
+        <tr><td class="label">Phase 2</td><td>Wektory → Tekst</td><td>Embedder candle + <code>all-MiniLM-L6-v2</code>, narzędzia <code>index_document</code> / <code>search_document</code></td><td><span class="pill done">done</span></td></tr>
+        <tr><td class="label">Phase 2.5</td><td>Ergonomia</td><td>Narzędzie <code>clear</code>, rozszerzone <code>stats</code>, pola <code>distance</code> / <code>similarity</code> w wynikach</td><td><span class="pill done">done</span></td></tr>
+        <tr><td class="label">Phase 3</td><td>Skalar → SIMD</td><td>AVX2 (x86_64) + NEON (Apple Silicon) + portable SIMD, runtime dispatch, proptest</td><td><span class="pill done">done</span></td></tr>
+        <tr><td class="label">Phase 4</td><td>Kupa → Struktura</td><td>Nazwane kolekcje, filtrowanie po metadanych, multi-tenant w jednym procesie</td><td><span class="pill done">done</span></td></tr>
+        <tr><td class="label">Phase 5</td><td>O(n) → O(log n)</td><td>KD-Tree z geometric pruning, auto-select brute-force vs KD-Tree po dim</td><td><span class="pill done">done</span></td></tr>
+        <tr><td class="label">Phase 6</td><td>Single → Multi-agent</td><td><code>NanoVecDatabase</code> + 2-poziomowy RwLock (parking_lot), budżet pamięci + LRU eviction, pinned <code>default</code> / <code>_conn_*</code>, nowy <code>memory</code> tool. <em>SSE odłożony.</em></td><td><span class="pill done">done (core)</span></td></tr>
+        <tr><td class="label">Phase 7</td><td>Exact → ANN (HNSW)</td><td>HNSW od zera dla 384-dim, porównanie z Qdrant</td><td><span class="pill next">stretch</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============== SLIDE 5: ARCHITEKTURA ============== -->
+<section class="slide">
+  <span class="slide-num">5 / 15</span>
+  <span class="slide-tag">Architektura</span>
+  <h2>Jak to wszystko jest połączone</h2>
+
+  <div class="ascii">
+<span class="hl3">┌──────────────────┐</span>     stdio /          <span class="hl">┌────────────────────────────────────────┐</span>
+<span class="hl3">│   Claude Code    │</span><span class="hl3"> ◄──</span> JSON-RPC   <span class="hl3">─►</span>  <span class="hl">│  NanoVec MCP Server (Rust, single bin) │</span>
+<span class="hl3">│   (klient MCP)   │</span>     MCP protocol     <span class="hl">│                                        │</span>
+<span class="hl3">└──────────────────┘</span>                       <span class="hl">│  ┌──────────┐   ┌──────────────────┐   │</span>
+                                              <span class="hl">│  │ Embedder │──►│ VectorDatabase   │   │</span>
+                                              <span class="hl">│  │ (candle) │   │  ├ VectorStore   │   │</span>
+                                              <span class="hl">│  │ MiniLM   │   │  ├ RecordStore   │   │</span>
+                                              <span class="hl">│  │ 384-dim  │   │  ├ KD-Tree       │   │</span>
+                                              <span class="hl">│  └──────────┘   │  └ Collections   │   │</span>
+                                              <span class="hl">│                 └──────────────────┘   │</span>
+                                              <span class="hl">│                          │             │</span>
+                                              <span class="hl">│                          ▼             │</span>
+                                              <span class="hl">│       <span class="hl2">SIMD distance (AVX2 / NEON)</span>     │</span>
+                                              <span class="hl">└────────────────────────────────────────┘</span>
+  </div>
+
+  <h3>Narzędzia MCP wystawione agentowi</h3>
+  <p>
+    <code>index_document</code> · <code>search_document</code> · <code>index_vector</code> · <code>search</code> ·
+    <code>delete</code> · <code>clear</code> · <code>stats</code> · <code>create_collection</code> ·
+    <code>list_collections</code> · <code>drop_collection</code>
+  </p>
+</section>
+
+<!-- ============== SLIDE 6: WYNIKI POMIAROWE ============== -->
+<section class="slide">
+  <span class="slide-num">6 / 15</span>
+  <span class="slide-tag">Wyniki — pomiary criterion</span>
+  <h2>Co naprawdę dało SIMD i KD-Tree</h2>
+
+  <div class="cols-2">
+    <div>
+      <h3>SIMD (NEON) vs skalar — pomiar criterion, 384-dim</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Operacja</th><th>Skalar</th><th>NEON</th><th>Speedup</th></tr></thead>
+          <tbody>
+            <tr><td class="label">dot_product</td><td class="num">296 ns</td><td class="num">32 ns</td><td class="num">9.3×</td></tr>
+            <tr><td class="label">euclidean</td><td class="num">305 ns</td><td class="num">33 ns</td><td class="num">9.2×</td></tr>
+            <tr><td class="label">cosine</td><td class="num">414 ns</td><td class="num">95 ns</td><td class="num">4.4×</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin-top:6px">
+        Cosine niższy gain (4.4× zamiast ~9×): wymaga 3 redukcji
+        (dot + ‖a‖ + ‖b‖) — SIMD przyspiesza akumulację, ale finalny sqrt + dzielenie pozostaje skalarne.
+      </p>
+      <p style="font-size:13px;color:var(--muted)">
+        Przy 1536-dim (np. OpenAI embeddings) speedup rośnie do 11.4× dla dot/euclidean.
+        Property-based testy potwierdzają SIMD ≡ skalar w granicach ε = 1e-4.
+      </p>
+    </div>
+    <div>
+      <h3>KD-Tree vs brute-force, k=10 — criterion</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>N × dim</th><th>Brute-force</th><th>KD-Tree</th><th>Speedup</th></tr></thead>
+          <tbody>
+            <tr><td class="label">1k × 8-dim</td><td class="num">6.3 µs</td><td class="num">1.7 µs</td><td class="num">3.7×</td></tr>
+            <tr><td class="label">10k × 8-dim</td><td class="num">44.5 µs</td><td class="num">1.5 µs</td><td class="num">29.7×</td></tr>
+            <tr><td class="label">1k × 384-dim</td><td class="num">42.6 µs</td><td class="num">17.7 µs</td><td class="num">2.4×</td></tr>
+            <tr><td class="label">10k × 384-dim</td><td class="num">448 µs</td><td class="num">63.5 µs</td><td class="num">7.1×</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="warn" style="margin-top:8px;font-size:13px">
+        <strong>Curse of dimensionality — niuans:</strong> przy dim=384 KD-Tree wciąż jest 7× szybsze
+        od brute-force (10k vektorów), ale gain spada z 30× przy dim=8.
+        Pruning działa coraz słabiej, ale nie jest bezsensowny — wbrew prostym tutorialom.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== SLIDE 7: BENCHMARK WIELOJĘZYCZNY ============== -->
+<section class="slide">
+  <span class="slide-num">7 / 15</span>
+  <span class="slide-tag">Realny test — ScootGo FAQ</span>
+  <h2>Co się stało gdy daliśmy bazie tekst PL/EN/UK</h2>
+
+  <p class="lede">
+    10 tematów FAQ (płatność, kask, parkowanie, bateria…) × 3 języki = 30 fragmentów.
+    Zadaliśmy 5 pytań w każdym języku i sprawdziliśmy, czy poprawna odpowiedź trafia w top-5.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Język</th><th>Recall @ 5</th><th>Trafienia #1</th><th>Cross-lingual hits</th></tr></thead>
+      <tbody>
+        <tr><td class="label">Polski</td><td class="num">80% (4/5)</td><td class="num">0</td><td class="num">0</td></tr>
+        <tr><td class="label">Angielski</td><td class="num">80% (4/5)</td><td class="num">2</td><td class="num">1</td></tr>
+        <tr><td class="label">Ukraiński</td><td class="num">60% (3/5)</td><td class="num">0</td><td class="num">0</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Wnioski</h3>
+  <ul>
+    <li><strong>Transfer międzyjęzykowy ≈ 0.</strong> Model <code>all-MiniLM-L6-v2</code> przypisuje każdy język do osobnego rejonu przestrzeni embeddingowej. PL pytanie nie trafia w EN odpowiedź.</li>
+    <li><strong>UK ma „efekt atraktora":</strong> jeden fragment (bezpieczeństwo) trafia na #1 dla <em>wszystkich</em> 5 ukraińskich zapytań — model słabo różnicuje rzadszy język.</li>
+    <li><strong>Topik „płatność" nie działa w żadnym języku</strong> — bo embedding listy marek (Visa, BLIK, Apple Pay) nie zbliża się do pytania „jak zapłacić?". To problem <em>korpusu</em>, nie bazy.</li>
+    <li><strong>Implikacja:</strong> dla realnego multi-language trzeba wymienić model na <code>multilingual-e5-base</code> lub <code>bge-m3</code>. NanoVec jest model-agnostic — to zmiana konfiguracji, nie architektury.</li>
+  </ul>
+</section>
+
+<!-- ============== SLIDE 8: GŁÓWNE PYTANIE ============== -->
+<section class="slide">
+  <span class="slide-num">8 / 15</span>
+  <span class="slide-tag">Pytanie projektu</span>
+  <h2>Wbudowana pamięć Claude<br>czy RAG w pamięci systemowej?</h2>
+
+  <p class="lede">
+    Claude Code ma własny mechanizm pamięci (<code>~/.claude/memory/</code> — pliki Markdown
+    ładowane do kontekstu na starcie sesji). NanoVec to alternatywa: zewnętrzny magazyn
+    wektorowy dostępny przez MCP, do którego agent <em>celowo</em> sięga.
+  </p>
+
+  <div class="ascii">
+<span class="hl3">Wbudowana pamięć Claude</span>                       <span class="hl">RAG w NanoVec</span>
+
+user msg ──►  <span class="hl3">[ ładuje MEMORY.md          ]</span>      user msg ──►  Claude
+              <span class="hl3">[ + wszystkie pliki memory/ ]</span>                       │
+              <span class="hl3">[ do kontekstu na starcie   ]</span>                       ▼
+                            │                              <span class="hl">tool: search_document(q)</span>
+                            ▼                                            │
+                          Claude                                          ▼
+                                                            <span class="hl">NanoVec ──► top-K fragmentów</span>
+                                                                          │
+                                                                          ▼
+                                                                       Claude
+  </div>
+</section>
+
+<!-- ============== SLIDE 9: PORÓWNANIE ============== -->
+<section class="slide">
+  <span class="slide-num">9 / 15</span>
+  <span class="slide-tag">Porównanie 1/2</span>
+  <h2>Wbudowana pamięć Claude vs NanoVec RAG</h2>
+
+  <div class="cols-2">
+    <div class="card claude">
+      <div class="label claude">Wbudowana pamięć Claude</div>
+      <h3>Pliki Markdown w <code>~/.claude/memory/</code></h3>
+      <ul class="pros">
+        <li>Zero infrastruktury — działa od razu</li>
+        <li>Człowiek może czytać i edytować pliki ręcznie</li>
+        <li>Wszystko w kontekście — model „widzi" wszystko</li>
+        <li>Brak halucynacji typu „pomyliłem fragmenty"</li>
+        <li>Świetne dla małych, stałych faktów (profil użytkownika, preferencje)</li>
+      </ul>
+      <ul class="cons">
+        <li>Każdy nowy fakt powiększa koszt <em>każdego</em> zapytania</li>
+        <li>Brak wyszukiwania po znaczeniu — czysty Markdown</li>
+        <li>Skaluje się do dziesiątek faktów, nie tysięcy</li>
+        <li>Linearne odczytywanie spowalnia start sesji</li>
+        <li>Po 200+ liniach MEMORY.md jest obcinany</li>
+      </ul>
+    </div>
+
+    <div class="card nanovec">
+      <div class="label nano">NanoVec RAG przez MCP</div>
+      <h3>Wektorowy magazyn, dostępny na żądanie</h3>
+      <ul class="pros">
+        <li>Semantyczne wyszukiwanie — pytanie nie musi pasować słownie</li>
+        <li>Skaluje się do milionów fragmentów</li>
+        <li>Płacisz tylko za top-K przywołanych, nie za całą bazę</li>
+        <li>Kolekcje + filtry po metadanych (data, projekt, autor)</li>
+        <li>Sub-millisecond — agent może wywołać kilka razy w jednym kroku</li>
+      </ul>
+      <ul class="cons">
+        <li>Agent musi „pamiętać że ma pamięć" — wywołać narzędzie</li>
+        <li>Top-K może przegapić istotny fragment (recall &lt; 100%)</li>
+        <li>Jakość zależy od modelu embeddingowego (patrz: PL/UK problem)</li>
+        <li>Ephemeral — restart procesu = utrata danych</li>
+        <li>Wymaga serwera MCP w tle</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============== SLIDE 10: PORÓWNANIE 2 ============== -->
+<section class="slide">
+  <span class="slide-num">10 / 15</span>
+  <span class="slide-tag">Porównanie 2/2</span>
+  <h2>Liczby i przypadki użycia</h2>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Wymiar</th>
+          <th>Pamięć Claude (Markdown)</th>
+          <th>NanoVec RAG</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="label">Koszt na zapytanie</td><td>O(N) — wszystko w kontekście</td><td>O(K) — tylko top-K</td></tr>
+        <tr><td class="label">Skala praktyczna</td><td>~50–200 faktów</td><td>10⁶+ fragmentów</td></tr>
+        <tr><td class="label">Sposób przywołania</td><td>Pasywny — zawsze załadowane</td><td>Aktywny — wywołanie narzędzia</td></tr>
+        <tr><td class="label">Wyszukiwanie</td><td>Brak — model „skanuje" tekst</td><td>Semantyczne, cosine similarity</td></tr>
+        <tr><td class="label">Latencja</td><td>0 ms (już w kontekście)</td><td>&lt; 1 ms na top-K</td></tr>
+        <tr><td class="label">Audyt przez człowieka</td><td>Trywialny — pliki .md</td><td>Wymaga narzędzia <code>stats</code> / dump</td></tr>
+        <tr><td class="label">Edycja przez człowieka</td><td>Edytuj plik</td><td>Wywołaj <code>delete</code> / re-index</td></tr>
+        <tr><td class="label">Persystencja</td><td>Dysk, na zawsze</td><td>Tylko RAM, do restartu</td></tr>
+        <tr><td class="label">Multi-agent</td><td>Per użytkownik</td><td>Kolekcje + (Phase 6) RwLock</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout">
+    <strong>Najważniejszy wniosek:</strong> to nie są konkurenci, to <em>komplementarne warstwy</em>.
+    Pamięć Claude = <strong>profil i preferencje</strong> (kim jest użytkownik, jak lubi pracować).
+    NanoVec RAG = <strong>baza wiedzy zadaniowej</strong> (dokumenty, kod, notatki ze spotkań, FAQ).
+  </div>
+</section>
+
+<!-- ============== SLIDE 11: KIEDY CO ============== -->
+<section class="slide">
+  <span class="slide-num">11 / 15</span>
+  <span class="slide-tag">Rekomendacje</span>
+  <h2>Kiedy używać czego</h2>
+
+  <div class="cols-2">
+    <div class="card claude">
+      <div class="label claude">Wybierz pamięć Claude gdy…</div>
+      <ul>
+        <li>Liczba faktów &lt; 100 i są <strong>statyczne</strong></li>
+        <li>Treść jest <strong>krytyczna w każdej sesji</strong> (kim jestem, jak chcę pracować)</li>
+        <li>Chcesz że treść można <strong>czytać oczami</strong> i edytować w VSCode</li>
+        <li>Nie chcesz utrzymywać dodatkowego procesu</li>
+        <li>Treść <strong>nie wymaga wyszukiwania</strong> — wystarczy zawsze mieć ją w kontekście</li>
+      </ul>
+    </div>
+
+    <div class="card nanovec">
+      <div class="label nano">Wybierz NanoVec gdy…</div>
+      <ul>
+        <li>Treść <strong>rośnie szybko</strong> (każde spotkanie, każdy commit, każdy ticket)</li>
+        <li>Większość fragmentów jest <strong>nieistotna dla większości pytań</strong></li>
+        <li>Potrzebujesz <strong>wyszukiwania po znaczeniu</strong> (synonimy, parafrazy)</li>
+        <li>Dane są <strong>strukturalne</strong> (kolekcje per projekt, filtry po dacie)</li>
+        <li>Koszt tokenów = realne pieniądze i chcesz <strong>płacić tylko za relewantne</strong></li>
+        <li>Pamięć jest <strong>z założenia ulotna</strong> (sesja, eksperyment, sandbox)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="warn">
+    <strong>Hybryda jest najlepsza:</strong> wbudowana pamięć trzyma profil i „twarde reguły"
+    (~20 plików). NanoVec trzyma wszystko inne — notatki, dokumenty, kod, historię.
+    Claude rozumie z pamięci <em>kim jest użytkownik</em>, a w NanoVec szuka <em>co już o tym wie</em>.
+  </div>
+</section>
+
+<!-- ============== SLIDE 12: PHASE 6 ============== -->
+<section class="slide">
+  <span class="slide-num">12 / 15</span>
+  <span class="slide-tag">Phase 6 — zrealizowano</span>
+  <h2>Single → Multi-agent (core gotowy)</h2>
+
+  <p class="lede">
+    Phase 6 trafiła z planu w kod. <strong>Dwa-poziomowy RwLock</strong>,
+    <strong>budżet pamięci z LRU-eviction</strong> i <strong>connection-scoped pinned collections</strong>
+    są zaimplementowane i przetestowane. SSE transport pozostaje na potem.
+  </p>
+
+  <div class="cols-2">
+    <div>
+      <h3>Zaimplementowane</h3>
+      <ul>
+        <li><code>NanoVecDatabase</code> z <code>RwLock&lt;HashMap&lt;String, Arc&lt;RwLock&lt;Collection&gt;&gt;&gt;&gt;</code> (parking_lot)</li>
+        <li>Outer write tylko dla <code>create_collection</code> / <code>drop_collection</code> — reszta read</li>
+        <li>Per-collection writer nie blokuje searcha na innych kolekcjach</li>
+        <li><code>NANOVEC_MEMORY_LIMIT_MB</code> (default 512) + <code>approx_bytes()</code> per collection</li>
+        <li>LRU tick (AtomicU64) + <code>evict_until_under_budget()</code></li>
+        <li>Pinned: <code>default</code> + <code>_conn_*</code> nigdy nie są wyrzucane</li>
+        <li>Nowe MCP tooly: rozszerzony <code>stats</code> + <code>memory</code> (per-collection breakdown)</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Realne pomiary (6 testów concurrency, release build)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Scenariusz</th><th>1 thread</th><th>8 threads</th><th>Speedup</th></tr></thead>
+          <tbody>
+            <tr><td class="label">Search, ta sama kolekcja (5k×384)</td><td class="num">1 922 q/s</td><td class="num">13 389 q/s</td><td class="num">6.97×</td></tr>
+            <tr><td class="label">Search, 8 kolekcji × 625 wektorów</td><td class="num">11 648 q/s</td><td class="num">71 920 q/s</td><td class="num">6.17×</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--muted)">
+        Test <em>write_isolation</em>: podczas 20 ms write-locka na kolekcji A,
+        wątek-czytelnik wykonał <strong>148 searchów</strong> na kolekcji B.
+        Cel z planu (≥ 6× scaling przy 8 wątkach) — osiągnięty ✓.
+      </p>
+    </div>
+  </div>
+
+  <h3>Nie zrobione w tej iteracji (świadomie odłożone)</h3>
+  <ul>
+    <li><strong>SSE transport</strong> (axum) — przynosi ~150 transitive deps; opt-in, zostawione na osobny PR</li>
+    <li><strong>Connection manager przez <code>_meta.connection_id</code></strong> — wymaga zmiany kontraktu MCP, czeka na rmcp upgrade</li>
+  </ul>
+</section>
+
+<!-- ============== SLIDE 13: PHASE 7 ============== -->
+<section class="slide">
+  <span class="slide-num">13 / 15</span>
+  <span class="slide-tag">Phase 7 — stretch</span>
+  <h2>Exact → Approximate (HNSW)</h2>
+
+  <p class="lede">
+    KD-Tree pada przy 384 wymiarach (curse of dimensionality). Brute-force trzyma się dobrze do
+    ~100k wektorów. Powyżej — potrzebny <strong>ANN (Approximate Nearest Neighbors)</strong>.
+    Stan sztuki to <strong>HNSW</strong> — hierarchical navigable small world graph.
+  </p>
+
+  <div class="cols-2">
+    <div>
+      <h3>Idea HNSW w jednym akapicie</h3>
+      <p>
+        Buduj graf wielowarstwowy: górne warstwy = mało punktów, gęste połączenia
+        (szybkie przeskoki po przestrzeni). Dolne warstwy = wszystkie punkty,
+        lokalne połączenia. Wyszukiwanie: zacznij na górze, schodź coraz niżej,
+        zawsze idąc do najbliższego sąsiada queriego. To greedy search z gwarancją
+        <code>O(log n)</code> i recall &gt; 95% przy dobrych parametrach.
+      </p>
+    </div>
+    <div>
+      <h3>Parametry implementacji</h3>
+      <ul>
+        <li><code>M</code> — max połączeń per node (typowo 16–32)</li>
+        <li><code>ef_construction</code> — szerokość searcha przy budowie (100–400)</li>
+        <li><code>ef_search</code> — szerokość przy zapytaniu (dynamicznie, tradeoff recall/latency)</li>
+        <li><code>m_L</code> — parametr poziomu (1/ln(M))</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Plan dostarczenia</h3>
+  <ul>
+    <li>HNSW <strong>od zera</strong> — graf jako <code>Vec&lt;Vec&lt;u32&gt;&gt;</code> per warstwa, własny priority queue</li>
+    <li>Wykorzystanie istniejących SIMD distance — graf używa tych samych <code>cosine_avx2</code> / <code>cosine_neon</code></li>
+    <li>Wymierne kryteria: <strong>recall@10 ≥ 0.95</strong>, <strong>latency &lt; 1 ms</strong> dla 1M × 384-dim</li>
+    <li>Auto-dispatch: brute-force (dim &gt; 50, n &lt; 10k) → KD-Tree (dim &lt; 50) → HNSW (n &gt; 10k)</li>
+    <li>Benchmark recall vs latency vs memory na różnych <code>M</code> / <code>ef</code></li>
+  </ul>
+
+  <div class="warn">
+    <strong>Stretch goal — nie zrealizowany w tej sesji.</strong> HNSW od zera to ~1500 linii Rust
+    + Algorithm 4 z paper Malkov &amp; Yashunin + recall sweep (36 punktów M×ef) + porównanie z Qdrant.
+    Uczciwa implementacja wymaga osobnej sesji deweloperskiej. Phase 7 czeka.
+  </div>
+</section>
+
+<!-- ============== SLIDE 14: NANOVEC vs QDRANT ============== -->
+<section class="slide">
+  <span class="slide-num">14 / 15</span>
+  <span class="slide-tag">Porównanie z konkurencją</span>
+  <h2>NanoVec vs Qdrant</h2>
+
+  <p class="lede">
+    Qdrant to obecnie najpopularniejsza wektorowa baza w Rust — production-ready, z HNSW,
+    persystencją, REST/gRPC, klastrowaniem. Po co więc pisać własną? Bo NanoVec celuje
+    w <strong>inny use-case</strong>.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Wymiar</th><th>Qdrant</th><th>NanoVec</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="label">Język</td><td>Rust</td><td>Rust</td></tr>
+        <tr><td class="label">Indeks domyślny</td><td>HNSW</td><td>brute-force + KD-Tree (HNSW: Phase 7)</td></tr>
+        <tr><td class="label">Persystencja</td><td>RocksDB + WAL + snapshots</td><td>Brak — pure in-memory, ephemeral</td></tr>
+        <tr><td class="label">Interfejs</td><td>REST + gRPC + Python/JS SDK</td><td>Tylko MCP (stdio + SSE w Phase 6)</td></tr>
+        <tr><td class="label">Filtrowanie</td><td>Pełny query language, payload index</td><td>Proste predykaty (eq, gt, lt, contains)</td></tr>
+        <tr><td class="label">Klastrowanie</td><td>Tak — sharding, replication</td><td>Single-node z założenia</td></tr>
+        <tr><td class="label">Quantization</td><td>Scalar, Product, Binary</td><td>Brak (f32 only)</td></tr>
+        <tr><td class="label">Rozmiar binarki</td><td>~80 MB</td><td>~12 MB (bez wag modelu)</td></tr>
+        <tr><td class="label">Cold start</td><td>2–5 s (mmap, load index)</td><td>10–30 s (download MiniLM) → potem ~30 ms</td></tr>
+        <tr><td class="label">Latencja search (10k × 384)</td><td>~0.3 ms (HNSW, recall 0.95)</td><td>~0.5 ms (brute-force + SIMD)</td></tr>
+        <tr><td class="label">Skala docelowa</td><td>10⁶ – 10⁹ wektorów, klaster</td><td>10⁴ – 10⁵, jeden proces</td></tr>
+        <tr><td class="label">Zależności</td><td>~600 crates (RocksDB, tonic, etc.)</td><td>~40 crates (candle + rmcp + serde)</td></tr>
+        <tr><td class="label">Embedding po stronie serwera</td><td>Tak (FastEmbed integration)</td><td>Tak (candle + MiniLM, in-process)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Kiedy wybrać co</h3>
+  <div class="cols-2">
+    <div class="card">
+      <div class="label">Qdrant</div>
+      <ul>
+        <li>Produkcyjna baza wiedzy ponad 10⁶ dokumentów</li>
+        <li>Wymagana persystencja, backupy, HA</li>
+        <li>Klient ma REST/gRPC, nie używa MCP</li>
+        <li>Złożone filtry: nested payloady, geo, full-text</li>
+        <li>Multi-tenant SaaS z 1000+ użytkowników</li>
+      </ul>
+    </div>
+    <div class="card nanovec">
+      <div class="label nano">NanoVec</div>
+      <ul>
+        <li>Ulotna pamięć agenta — restart sesji = czysty stan</li>
+        <li>Klient to Claude / inny LLM przez MCP</li>
+        <li>Sandbox, eksperyment, lokalny dev</li>
+        <li>Chcesz <em>rozumieć</em> co się dzieje — 3.5k linii czytalnego Rust</li>
+        <li>Zero zewnętrznej infrastruktury — jeden plik binarny</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>NanoVec to nie „lepszy Qdrant".</strong> To inny gatunek — Qdrant celuje w produkcyjną
+    bazę wiedzy, NanoVec w <em>working memory</em> pojedynczego agenta. Granica jest jak między
+    Postgresem a Redisem: oba przechowują dane, ale projektowane do innych obciążeń.
+  </div>
+</section>
+
+<!-- ============== SLIDE 15: PODSUMOWANIE ============== -->
+<section class="slide">
+  <span class="slide-num">15 / 15</span>
+  <span class="slide-tag">Co dalej</span>
+  <h2>Co projekt dał — i co dalej</h2>
+
+  <h3>Czego się nauczyliśmy (twarde liczby, nie marketing)</h3>
+  <ul>
+    <li><strong>SIMD jest realny — ale nie wszędzie tak samo.</strong> dot_product / euclidean dają 9.3× / 9.2× na NEON, ale cosine tylko 4.4× (3 niezależne redukcje vs 1). Cytaty „9-12×” w blogach są prawdziwe, ale nie dla każdej operacji.</li>
+    <li><strong>KD-Tree przy 384-dim nadal działa — wbrew podręcznikom.</strong> 7.1× szybsze od brute-force na 10k wektorów. Curse of dimensionality nie zabija drzewa, tylko mocno tępi gain (z 30× przy dim=8 do 7× przy dim=384).</li>
+    <li><strong>RwLock per-collection daje liniowe skalowanie.</strong> 8 wątków → 6.97× throughput na tej samej kolekcji, 6.17× na różnych. Pod globalnym Mutexem byłoby ~1.0×.</li>
+    <li><strong>Model embeddingowy decyduje o jakości multi-language.</strong> NanoVec jest agnostyk modelu — wymiana <code>all-MiniLM-L6-v2</code> na <code>bge-m3</code> to zmiana 1 linii konfiguracji.</li>
+    <li><strong>Pamięć agenta to dwa różne problemy:</strong> profil użytkownika (stały, mały) i wiedza zadaniowa (rosnąca, ogromna). Jeden mechanizm nie pasuje do obu.</li>
+  </ul>
+
+  <h3>Roadmap — co dalej</h3>
+  <ul>
+    <li><strong>Phase 6 core</strong> ✅ — dwa-poziomowy RwLock, memory budget, LRU eviction zrobione i przetestowane (6 testów concurrency).</li>
+    <li><strong>Phase 6 reszta</strong> — SSE transport (axum) + connection manager przez <code>_meta</code>. Osobny PR, ~150 zależności.</li>
+    <li><strong>Phase 7 — HNSW</strong> (stretch). Wymaga osobnej sesji: ~1500 linii, recall sweep, porównanie z Qdrant. Plan i dispatch są napisane (<code>docs/plans/phase-7-hnsw-*.md</code>) ale kod jeszcze nie istnieje.</li>
+    <li>Wymiana embeddera na <code>bge-m3</code> lub <code>multilingual-e5</code> dla realnego multi-language.</li>
+    <li>Eksperyment: <strong>hybryda</strong> — pamięć Claude + NanoVec na tych samych danych, porównanie jakości odpowiedzi.</li>
+  </ul>
+
+  <div class="callout" style="margin-top:24px">
+    <strong>Uczciwość pomiarów:</strong> wszystkie liczby na slajdach pochodzą z criterion / cargo test
+    uruchomionych na tym konkretnym M-series host. Nie ma w prezentacji żadnych „typowo / szacunkowo / w blogu pisali”.
+    Repro: <code>cargo bench --bench simd_vs_scalar --bench kdtree</code> + <code>cargo test --release concurrency -- --nocapture</code>.
+  </div>
+</section>
+
+</div>
+</body>
+</html>
