@@ -136,9 +136,16 @@ fn phase_2_5_full_surface() {
         stats["default_metric"]["document"], "cosine",
         "document default should be cosine: {stats}",
     );
-    assert_eq!(
-        stats["embedder"]["model"], "sentence-transformers/all-MiniLM-L6-v2",
-        "embedder model identity: {stats}",
+    // Embedder identity: pinned to whatever NANOVEC_EMBED_MODEL resolved to.
+    // The default is the multilingual MiniLM L12; if a future test overrides
+    // it via env var, this still passes as long as we're on sentence-
+    // transformers family with the canonical prefix.
+    let model = stats["embedder"]["model"]
+        .as_str()
+        .expect("embedder.model must be a string");
+    assert!(
+        model.starts_with("sentence-transformers/"),
+        "embedder model identity: {stats}"
     );
     assert_eq!(
         stats["embedder"]["dim"], 384,

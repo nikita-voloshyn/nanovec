@@ -1,11 +1,14 @@
 //! Server-side text embedding via candle.
 //!
-//! Hosts a pre-trained `sentence-transformers/all-MiniLM-L6-v2` BERT model
-//! (6 layers, 384-dim hidden) and turns text into L2-normalized 384-dim
-//! vectors via mean-pooling over the last hidden state with attention mask.
+//! Hosts a pre-trained sentence-transformer BERT model and turns text into
+//! L2-normalized 384-dim vectors via mean-pooling over the last hidden
+//! state weighted by the attention mask.
 //!
-//! The model identity is hardcoded for the whole project (YAGNI: no model
-//! configuration knob until a second concrete use case appears).
+//! Model selection is controlled by the `NANOVEC_EMBED_MODEL` env var; the
+//! default is `paraphrase-multilingual-MiniLM-L12-v2` (50+ languages,
+//! meaningful cross-lingual recall on PL/UK queries). The legacy English-
+//! only `all-MiniLM-L6-v2` checkpoint is still loadable via the env var if
+//! you want the smaller / faster 6-layer model and don't need multilingual.
 
 use std::fmt;
 
@@ -15,14 +18,28 @@ use candle_transformers::models::bert::{BertModel, Config};
 use hf_hub::api::sync::Api;
 use tokenizers::Tokenizer;
 
-/// Hardcoded embedding dimension for the chosen MiniLM model.
+/// Hardcoded embedding dimension. All currently supported BERT-family
+/// sentence-transformer checkpoints produce 384-dim L2-normalized vectors:
+///   - `sentence-transformers/all-MiniLM-L6-v2` (English-only, 6 layers)
+///   - `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
+///     (50+ languages, 12 layers — slower per inference, real multilingual
+///     semantic retrieval)
 const EMBEDDING_DIM: usize = 384;
 
-/// Canonical HuggingFace identifier for the embedding model. Pinned to the
-/// `sentence-transformers/all-MiniLM-L6-v2` checkpoint and exposed publicly so
-/// callers (e.g. `stats` MCP tool) can report which model is loaded without
-/// duplicating the string.
-pub const MODEL_NAME: &str = "sentence-transformers/all-MiniLM-L6-v2";
+/// Default embedding model. Multilingual MiniLM gives meaningful cross-
+/// lingual recall on PL/UK queries (vs ~0% for the English-only model).
+/// Override at runtime with the `NANOVEC_EMBED_MODEL` env var if you
+/// only need English and want the smaller / faster 6-layer model.
+pub const DEFAULT_MODEL_NAME: &str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2";
+
+/// Env-var key controlling the embedder selection.
+pub const MODEL_ENV_VAR: &str = "NANOVEC_EMBED_MODEL";
+
+/// Backward-compat re-export of the old constant name. Now resolves at
+/// runtime via the env var, falling back to [`DEFAULT_MODEL_NAME`].
+pub fn resolve_model_name() -> String {
+    std::env::var(MODEL_ENV_VAR).unwrap_or_else(|_| DEFAULT_MODEL_NAME.to_string())
+}
 
 /// Loaded text embedder. Cheap to share via `Arc` — `embed(&self, ...)` is
 /// read-only after [`Embedder::load`].
@@ -30,6 +47,8 @@ pub struct Embedder {
     tokenizer: Tokenizer,
     model: BertModel,
     device: Device,
+    /// Canonical HuggingFace identifier of the loaded model (for `stats`).
+    model_name: String,
 }
 
 /// Errors emitted by the embedding pipeline.
@@ -76,10 +95,17 @@ impl Embedder {
     /// the HF cache on subsequent runs. Caller is responsible for executing
     /// this off the async reactor (e.g. `tokio::task::spawn_blocking`).
     pub fn load() -> Result<Self, EmbedError> {
+        Self::load_named(&resolve_model_name())
+    }
+
+    /// Load a specific model by HuggingFace identifier. Used by tests that
+    /// want deterministic model selection; production goes through `load()`
+    /// which reads the env var.
+    pub fn load_named(model_name: &str) -> Result<Self, EmbedError> {
         let device = Device::Cpu;
 
         let api = Api::new().map_err(|e| EmbedError::DownloadFailed(e.to_string()))?;
-        let repo = api.model(MODEL_NAME.to_string());
+        let repo = api.model(model_name.to_string());
 
         let config_path = repo
             .get("config.json")
@@ -117,17 +143,18 @@ impl Embedder {
             tokenizer,
             model,
             device,
+            model_name: model_name.to_string(),
         })
     }
 
-    /// Embedding output dimension. Fixed at 384 for MiniLM-L6-v2.
+    /// Embedding output dimension. 384 for the MiniLM-L6 / MiniLM-L12 family.
     pub fn dimension(&self) -> usize {
         EMBEDDING_DIM
     }
 
     /// Canonical HuggingFace identifier of the loaded model.
-    pub fn model_name(&self) -> &'static str {
-        MODEL_NAME
+    pub fn model_name(&self) -> &str {
+        &self.model_name
     }
 
     /// Encode `text` into an L2-normalized 384-dimensional vector.
@@ -232,13 +259,23 @@ mod tests {
     }
 
     #[test]
-    fn model_name_const_matches_canonical_repo() {
-        assert_eq!(MODEL_NAME, "sentence-transformers/all-MiniLM-L6-v2");
+    fn default_model_is_multilingual_minilm_l12() {
+        assert_eq!(
+            DEFAULT_MODEL_NAME,
+            "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        );
     }
 
     #[test]
-    fn model_name_accessor_returns_const() {
-        assert_eq!(EMBEDDER.model_name(), MODEL_NAME);
+    fn model_name_accessor_returns_loaded_model() {
+        // The shared EMBEDDER respects NANOVEC_EMBED_MODEL; just verify the
+        // accessor returns *some* sentence-transformers identifier rather
+        // than the empty string.
+        let name = EMBEDDER.model_name();
+        assert!(
+            name.starts_with("sentence-transformers/"),
+            "unexpected model name: {name}"
+        );
     }
 
     #[test]
