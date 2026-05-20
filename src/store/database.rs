@@ -395,6 +395,7 @@ impl Collection {
             name,
             store: VectorStore::new(dimension),
             records: RecordStore::new(),
+            hnsw: None,
         }
     }
 }

@@ -161,6 +161,9 @@ impl NanoVecServer {
 
         let metadata = parse_metadata(params.metadata);
         let id = coll.records.insert(params.text, metadata, offset);
+        // Any mutation invalidates the HNSW index — it no longer matches the
+        // store and using it would silently return wrong neighbors.
+        coll.invalidate_index();
 
         tracing::debug!(id, offset, collection = %coll.name, "indexed vector");
         Ok(serde_json::json!({ "id": id }).to_string())
@@ -215,6 +218,7 @@ impl NanoVecServer {
 
         let metadata = parse_metadata(params.metadata);
         let id = coll.records.insert(params.text, metadata, offset);
+        coll.invalidate_index();
 
         tracing::debug!(id, offset, collection = %coll.name, "indexed document");
         Ok(serde_json::json!({ "id": id }).to_string())
@@ -240,14 +244,38 @@ impl NanoVecServer {
         // Inner read-lock: many concurrent searches on the same collection
         // never block each other.
         let coll = guard.inner.read();
-        let results = BruteForce::search(
-            &coll.store,
-            &coll.records,
-            &params.vector,
-            params.k,
-            metric,
-            filter_pairs.as_deref(),
-        );
+        // HNSW dispatch: if the collection has a built index AND the requested
+        // metric matches what HNSW was built under (cosine), use it.
+        // Otherwise fall back to brute-force (which supports any metric).
+        let results = if let Some(hnsw) = coll.hnsw.as_ref() {
+            if metric == Metric::Cosine {
+                hnsw.search(
+                    &coll.store,
+                    &coll.records,
+                    &params.vector,
+                    params.k,
+                    filter_pairs.as_deref(),
+                )
+            } else {
+                BruteForce::search(
+                    &coll.store,
+                    &coll.records,
+                    &params.vector,
+                    params.k,
+                    metric,
+                    filter_pairs.as_deref(),
+                )
+            }
+        } else {
+            BruteForce::search(
+                &coll.store,
+                &coll.records,
+                &params.vector,
+                params.k,
+                metric,
+                filter_pairs.as_deref(),
+            )
+        };
 
         let json_results: Vec<serde_json::Value> = results
             .into_iter()
@@ -306,14 +334,36 @@ impl NanoVecServer {
         };
 
         let coll = guard.inner.read();
-        let results = BruteForce::search(
-            &coll.store,
-            &coll.records,
-            &query_vec,
-            params.k,
-            metric,
-            filter_pairs.as_deref(),
-        );
+        // Same HNSW dispatch as `search`: cosine + built index => use HNSW.
+        let results = if let Some(hnsw) = coll.hnsw.as_ref() {
+            if metric == Metric::Cosine {
+                hnsw.search(
+                    &coll.store,
+                    &coll.records,
+                    &query_vec,
+                    params.k,
+                    filter_pairs.as_deref(),
+                )
+            } else {
+                BruteForce::search(
+                    &coll.store,
+                    &coll.records,
+                    &query_vec,
+                    params.k,
+                    metric,
+                    filter_pairs.as_deref(),
+                )
+            }
+        } else {
+            BruteForce::search(
+                &coll.store,
+                &coll.records,
+                &query_vec,
+                params.k,
+                metric,
+                filter_pairs.as_deref(),
+            )
+        };
 
         let json_results: Vec<serde_json::Value> = results
             .into_iter()
@@ -353,6 +403,7 @@ impl NanoVecServer {
         let coll_ref = &mut *coll;
         brute::delete(&mut coll_ref.store, &mut coll_ref.records, params.id)
             .map_err(|e| format!("{e}"))?;
+        coll_ref.invalidate_index();
         tracing::debug!(id = params.id, collection = %coll_name, "deleted vector");
         Ok(serde_json::json!({ "success": true }).to_string())
     }
@@ -371,8 +422,81 @@ impl NanoVecServer {
         let deleted = coll.records.count();
         coll.store.clear();
         coll.records.clear();
+        coll.invalidate_index();
         tracing::info!(count = deleted, collection = %coll.name, "cleared collection");
         Ok(serde_json::json!({ "deleted": deleted }).to_string())
+    }
+
+    #[tool(
+        name = "rebuild_index",
+        description = "Build (or drop) an approximate index over a collection. Supported kinds: \"hnsw\" (default) — Hierarchical Navigable Small World graph, gives 10-50× search speedup at 10k+ vectors with cosine metric; \"none\" — drop any existing index and fall back to brute-force. HNSW is automatically invalidated whenever the collection is mutated."
+    )]
+    fn rebuild_index(
+        &self,
+        Parameters(params): Parameters<tools::RebuildIndexParams>,
+    ) -> Result<String, String> {
+        let target = resolve_collection_name(params.collection, params.connection_id);
+        let guard = self
+            .db
+            .resolve(target.as_deref())
+            .map_err(|e| e.to_string())?;
+        let mut coll = guard.inner.write();
+
+        let kind = params.kind.as_deref().unwrap_or("hnsw");
+        match kind {
+            "none" => {
+                coll.invalidate_index();
+                Ok(serde_json::json!({
+                    "kind": "none",
+                    "collection": coll.name.clone(),
+                })
+                .to_string())
+            }
+            "hnsw" => {
+                let m = params.m.unwrap_or(16);
+                let ef_c = params.ef_construction.unwrap_or(200);
+                let ef_s = params.ef_search.unwrap_or(50);
+                if m == 0 {
+                    return Err("m must be > 0".to_string());
+                }
+                if ef_c < m {
+                    return Err(format!("ef_construction ({ef_c}) must be >= m ({m})"));
+                }
+                let hnsw_params = crate::index::HnswParams::new(m, ef_c, ef_s);
+
+                let start = std::time::Instant::now();
+                let hnsw = crate::index::Hnsw::build(&coll.store, hnsw_params);
+                let build_ms = start.elapsed().as_millis();
+                let mem_bytes = hnsw.approx_bytes();
+                let nodes = hnsw.len();
+                coll.hnsw = Some(hnsw);
+
+                tracing::info!(
+                    collection = %coll.name,
+                    nodes,
+                    m,
+                    ef_construction = ef_c,
+                    ef_search = ef_s,
+                    build_ms = build_ms as u64,
+                    "built HNSW index"
+                );
+
+                Ok(serde_json::json!({
+                    "kind": "hnsw",
+                    "collection": coll.name.clone(),
+                    "nodes": nodes,
+                    "m": m,
+                    "ef_construction": ef_c,
+                    "ef_search": ef_s,
+                    "build_ms": build_ms as u64,
+                    "memory_bytes": mem_bytes,
+                })
+                .to_string())
+            }
+            other => Err(format!(
+                "unknown index kind: {other} (supported: hnsw, none)"
+            )),
+        }
     }
 
     #[tool(

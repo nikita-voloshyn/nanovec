@@ -364,13 +364,8 @@ impl Hnsw {
             );
             // Paper uses M neighbors during insert on all layers; layer 0's
             // higher cap (m_max0 = 2*M) is enforced via pruning below.
-            let selected = self.select_neighbors_heuristic(
-                &candidates,
-                self.params.m,
-                layer,
-                store,
-                query,
-            );
+            let selected =
+                self.select_neighbors_heuristic(&candidates, self.params.m, layer, store, query);
 
             // Connect `id` to selected neighbors.
             for &neigh in &selected {

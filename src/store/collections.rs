@@ -24,6 +24,11 @@ pub struct Collection {
     pub name: String,
     pub store: VectorStore,
     pub records: RecordStore,
+    /// Optional HNSW index over the same corpus. Built lazily through the
+    /// `rebuild_index` MCP tool. When `Some`, search tools use it; when
+    /// `None`, they fall back to brute-force. The index is invalidated
+    /// (set to `None`) on any mutation (`insert`, `delete`, `clear`).
+    pub hnsw: Option<crate::index::Hnsw>,
 }
 
 impl Collection {
@@ -32,6 +37,7 @@ impl Collection {
             name,
             store: VectorStore::new(dimension),
             records: RecordStore::new(),
+            hnsw: None,
         }
     }
 
@@ -43,6 +49,13 @@ impl Collection {
     /// Number of records in this collection.
     pub fn count(&self) -> usize {
         self.records.count()
+    }
+
+    /// Invalidate the HNSW index. Called from MCP handlers after any
+    /// mutation that changes the underlying VectorStore — the graph is now
+    /// stale and using it would silently return wrong neighbors.
+    pub fn invalidate_index(&mut self) {
+        self.hnsw = None;
     }
 }
 

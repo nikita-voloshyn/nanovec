@@ -113,3 +113,27 @@ pub struct DropCollectionParams {
     /// The name of the collection to drop.
     pub name: String,
 }
+
+/// Parameters for the `rebuild_index` tool.
+///
+/// Builds an approximate index (HNSW) over the collection's current contents.
+/// Phase 7 supports only HNSW; the `kind` field is reserved for future
+/// expansion (e.g. forcing a specific index type or dropping back to
+/// brute-force). When omitted, defaults to HNSW.
+#[derive(Deserialize, schemars::JsonSchema)]
+pub struct RebuildIndexParams {
+    /// Target collection. Falls back to the connection-scoped collection
+    /// (`_conn_<connection_id>`) or `"default"`.
+    pub collection: Option<String>,
+    /// Optional connection identifier (see [`IndexVectorParams`]).
+    pub connection_id: Option<String>,
+    /// Index kind. Currently `"hnsw"` (default) or `"none"` (drops any
+    /// existing index, returns to brute-force only).
+    pub kind: Option<String>,
+    /// Optional HNSW `M` parameter (max neighbors per layer). Default 16.
+    pub m: Option<usize>,
+    /// Optional HNSW `ef_construction` (beam width during build). Default 200.
+    pub ef_construction: Option<usize>,
+    /// Optional HNSW `ef_search` (beam width during query). Default 50.
+    pub ef_search: Option<usize>,
+}
