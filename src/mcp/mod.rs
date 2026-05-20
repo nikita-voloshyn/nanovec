@@ -52,6 +52,22 @@ impl NanoVecServer {
     }
 }
 
+/// Resolve `(collection, connection_id)` to the target collection name.
+///
+/// - explicit `collection` wins, regardless of `connection_id`.
+/// - else if `connection_id` is `Some("alice")` → `"_conn_alice"`
+///   (auto-created and pinned per Phase 6 T4).
+/// - else `None` → caller falls back to `"default"` via `db.resolve(None)`.
+fn resolve_collection_name(
+    collection: Option<String>,
+    connection_id: Option<String>,
+) -> Option<String> {
+    if let Some(c) = collection {
+        return Some(c);
+    }
+    connection_id.map(|id| format!("_conn_{id}"))
+}
+
 /// Parse metadata from an optional JSON value into a Vec of key-value pairs.
 fn parse_metadata(value: Option<serde_json::Value>) -> Vec<(String, String)> {
     match value {
@@ -122,9 +138,10 @@ impl NanoVecServer {
             return Err("vector must not be empty".to_string());
         }
 
+        let target = resolve_collection_name(params.collection, params.connection_id);
         let guard = self
             .db
-            .resolve(params.collection.as_deref())
+            .resolve(target.as_deref())
             .map_err(|e| e.to_string())?;
 
         let mut coll = guard.inner.write();
@@ -175,9 +192,10 @@ impl NanoVecServer {
 
         // Resolve target collection, then take its inner write-lock for the
         // store/records mutation.
+        let target = resolve_collection_name(params.collection, params.connection_id);
         let guard = self
             .db
-            .resolve(params.collection.as_deref())
+            .resolve(target.as_deref())
             .map_err(|e| e.to_string())?;
         let mut coll = guard.inner.write();
 
@@ -210,9 +228,10 @@ impl NanoVecServer {
         let metric = parse_metric(&params.metric, self.db.metric)?;
         let filter_pairs = filter_to_pairs(params.filter);
 
+        let target = resolve_collection_name(params.collection, params.connection_id);
         let guard_opt = self
             .db
-            .resolve_readonly(params.collection.as_deref())
+            .resolve_readonly(target.as_deref())
             .map_err(|e| e.to_string())?;
         let Some(guard) = guard_opt else {
             return Ok(serde_json::json!([]).to_string());
@@ -277,9 +296,10 @@ impl NanoVecServer {
         let metric = parse_metric(&params.metric, Metric::Cosine)?;
         let filter_pairs = filter_to_pairs(params.filter);
 
+        let target = resolve_collection_name(params.collection, params.connection_id);
         let guard_opt = self
             .db
-            .resolve_readonly(params.collection.as_deref())
+            .resolve_readonly(target.as_deref())
             .map_err(|e| e.to_string())?;
         let Some(guard) = guard_opt else {
             return Ok(serde_json::json!([]).to_string());
@@ -323,9 +343,10 @@ impl NanoVecServer {
         description = "Delete a document by its ID. Optional `collection` defaults to `default`."
     )]
     fn delete(&self, Parameters(params): Parameters<DeleteParams>) -> Result<String, String> {
+        let target = resolve_collection_name(params.collection, params.connection_id);
         let guard = self
             .db
-            .resolve(params.collection.as_deref())
+            .resolve(target.as_deref())
             .map_err(|e| e.to_string())?;
         let mut coll = guard.inner.write();
         let coll_name = coll.name.clone();
@@ -341,9 +362,10 @@ impl NanoVecServer {
         description = "Remove all indexed documents from one collection (defaults to `default`). Resets the ID counter; the collection itself is preserved (use `drop_collection` to remove it entirely)."
     )]
     fn clear(&self, Parameters(params): Parameters<ClearParams>) -> Result<String, String> {
+        let target = resolve_collection_name(params.collection, params.connection_id);
         let guard = self
             .db
-            .resolve(params.collection.as_deref())
+            .resolve(target.as_deref())
             .map_err(|e| e.to_string())?;
         let mut coll = guard.inner.write();
         let deleted = coll.records.count();

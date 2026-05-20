@@ -6,3 +6,4 @@ pub mod mcp;
 pub mod server;
 pub mod simd;
 pub mod store;
+pub mod transport;

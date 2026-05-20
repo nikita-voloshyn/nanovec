@@ -12,9 +12,14 @@ pub struct IndexVectorParams {
     pub vector: Vec<f32>,
     /// Optional key-value metadata pairs.
     pub metadata: Option<serde_json::Value>,
-    /// Optional collection name. Defaults to `"default"` (auto-created on
-    /// first access).
+    /// Optional collection name. Defaults to the connection-scoped collection
+    /// (`_conn_<connection_id>`) if `connection_id` is provided, otherwise
+    /// `"default"`.
     pub collection: Option<String>,
+    /// Optional connection identifier. When set and `collection` is absent,
+    /// the call operates on `_conn_<connection_id>` — an auto-created pinned
+    /// collection isolated per logical client.
+    pub connection_id: Option<String>,
 }
 
 /// Parameters for the `index_document` tool.
@@ -24,10 +29,11 @@ pub struct IndexDocumentParams {
     pub text: String,
     /// Optional key-value metadata pairs.
     pub metadata: Option<serde_json::Value>,
-    /// Optional collection name. Defaults to `"default"` (auto-created on
-    /// first access). The collection's dimension must match the embedder
-    /// output (384) or the call errors.
+    /// Optional collection name. Defaults to the connection-scoped collection
+    /// when `connection_id` is set, otherwise `"default"`.
     pub collection: Option<String>,
+    /// Optional connection identifier (see [`IndexVectorParams`]).
+    pub connection_id: Option<String>,
 }
 
 /// Parameters for the `search` tool.
@@ -42,8 +48,11 @@ pub struct SearchParams {
     /// Optional metadata filter — only records whose metadata contains
     /// **all** of these `(key, value)` pairs are considered.
     pub filter: Option<HashMap<String, String>>,
-    /// Optional collection name. Defaults to `"default"`.
+    /// Optional collection name. Falls back to the connection-scoped
+    /// collection (`_conn_<connection_id>`) or `"default"`.
     pub collection: Option<String>,
+    /// Optional connection identifier (see [`IndexVectorParams`]).
+    pub connection_id: Option<String>,
 }
 
 /// Parameters for the `search_document` tool.
@@ -60,8 +69,11 @@ pub struct SearchDocumentParams {
     /// Optional metadata filter — only records whose metadata contains
     /// **all** of these `(key, value)` pairs are considered.
     pub filter: Option<HashMap<String, String>>,
-    /// Optional collection name. Defaults to `"default"`.
+    /// Optional collection name. Falls back to the connection-scoped
+    /// collection (`_conn_<connection_id>`) or `"default"`.
     pub collection: Option<String>,
+    /// Optional connection identifier (see [`IndexVectorParams`]).
+    pub connection_id: Option<String>,
 }
 
 /// Parameters for the `delete` tool.
@@ -69,16 +81,21 @@ pub struct SearchDocumentParams {
 pub struct DeleteParams {
     /// The ID of the document to delete.
     pub id: u64,
-    /// Optional collection name. Defaults to `"default"`.
+    /// Optional collection name. Falls back to the connection-scoped
+    /// collection or `"default"`.
     pub collection: Option<String>,
+    /// Optional connection identifier (see [`IndexVectorParams`]).
+    pub connection_id: Option<String>,
 }
 
 /// Parameters for the `clear` tool.
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct ClearParams {
-    /// Optional collection name. Defaults to `"default"`. Clears one
-    /// collection only; does NOT drop the collection.
+    /// Optional collection name. Falls back to the connection-scoped
+    /// collection or `"default"`. Clears one collection only.
     pub collection: Option<String>,
+    /// Optional connection identifier (see [`IndexVectorParams`]).
+    pub connection_id: Option<String>,
 }
 
 /// Parameters for the `create_collection` tool.
