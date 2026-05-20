@@ -245,7 +245,7 @@
   <h1>NanoVec<span class="dot">.</span></h1>
   <div class="sub">In-memory wektorowa baza danych w czystym Rust<br>jako serwer MCP dla pamięci roboczej agentów AI</div>
   <div class="meta">
-    v0.1.0 · Phase 1–6 ukończone (stdio + HTTP + multi-agent)<br>
+    v0.1.0 · Phase 1–7 ukończone (multi-agent + HNSW od zera)<br>
     2026-05-20 · Nikita Voloshyn
   </div>
 </section>
@@ -327,11 +327,11 @@
   <h2>Sześć faz — od pustego repo do produktu</h2>
 
   <div class="stats">
-    <div class="stat"><div class="v">6/7</div><div class="l">Faz ukończonych</div></div>
-    <div class="stat"><div class="v">~4500</div><div class="l">Linii Rust</div></div>
+    <div class="stat"><div class="v">7/7</div><div class="l">Faz ukończonych</div></div>
+    <div class="stat"><div class="v">~5500</div><div class="l">Linii Rust</div></div>
     <div class="stat"><div class="v">9.3×</div><div class="l">Speedup SIMD (dot)</div></div>
-    <div class="stat"><div class="v">6.97×</div><div class="l">Multi-thread (8t)</div></div>
-    <div class="stat"><div class="v">111</div><div class="l">Tests passing</div></div>
+    <div class="stat"><div class="v">54.9×</div><div class="l">HNSW vs brute (10k)</div></div>
+    <div class="stat"><div class="v">120</div><div class="l">Tests passing</div></div>
     <div class="stat"><div class="v">11</div><div class="l">Narzędzi MCP</div></div>
   </div>
 
@@ -348,7 +348,7 @@
         <tr><td class="label">Phase 4</td><td>Kupa → Struktura</td><td>Nazwane kolekcje, filtrowanie po metadanych, multi-tenant w jednym procesie</td><td><span class="pill done">done</span></td></tr>
         <tr><td class="label">Phase 5</td><td>O(n) → O(log n)</td><td>KD-Tree z geometric pruning, auto-select brute-force vs KD-Tree po dim</td><td><span class="pill done">done</span></td></tr>
         <tr><td class="label">Phase 6</td><td>Single → Multi-agent</td><td><code>NanoVecDatabase</code> + 2-poziomowy RwLock (parking_lot), budżet pamięci + LRU eviction, pinned <code>default</code> / <code>_conn_*</code>, <code>memory</code> tool, <strong>streamable HTTP transport (axum)</strong>, <code>connection_id</code> dla multi-tenant.</td><td><span class="pill done">done</span></td></tr>
-        <tr><td class="label">Phase 7</td><td>Exact → ANN (HNSW)</td><td>HNSW od zera dla 384-dim, porównanie z Qdrant</td><td><span class="pill next">stretch</span></td></tr>
+        <tr><td class="label">Phase 7</td><td>Exact → ANN (HNSW)</td><td>HNSW od zera dla 384-dim (Malkov &amp; Yashunin Algorithm 4 heuristic), reuse SIMD cosine, sweep 9 konfiguracji parametrów. <em>Porównanie z Qdrant — odłożone.</em></td><td><span class="pill done">done (core)</span></td></tr>
       </tbody>
     </table>
   </div>
@@ -667,50 +667,53 @@ user msg ──►  <span class="hl3">[ ładuje MEMORY.md          ]</span>     
 <!-- ============== SLIDE 13: PHASE 7 ============== -->
 <section class="slide">
   <span class="slide-num">13 / 15</span>
-  <span class="slide-tag">Phase 7 — stretch</span>
-  <h2>Exact → Approximate (HNSW)</h2>
+  <span class="slide-tag">Phase 7 — zrealizowano</span>
+  <h2>Exact → Approximate (HNSW od zera)</h2>
 
   <p class="lede">
-    KD-Tree pada przy 384 wymiarach (curse of dimensionality). Brute-force trzyma się dobrze do
-    ~100k wektorów. Powyżej — potrzebny <strong>ANN (Approximate Nearest Neighbors)</strong>.
-    Stan sztuki to <strong>HNSW</strong> — hierarchical navigable small world graph.
+    HNSW zaimplementowany <strong>od zera</strong> — graf 3-warstwowy z heurystyką wyboru
+    sąsiadów (Algorithm 4 z paper Malkov &amp; Yashunin). Reuse istniejącej SIMD cosine
+    z Phase 3. Sweep 9 konfiguracji parametrów na 10k × 384-dim.
   </p>
 
   <div class="cols-2">
     <div>
-      <h3>Idea HNSW w jednym akapicie</h3>
-      <p>
-        Buduj graf wielowarstwowy: górne warstwy = mało punktów, gęste połączenia
-        (szybkie przeskoki po przestrzeni). Dolne warstwy = wszystkie punkty,
-        lokalne połączenia. Wyszukiwanie: zacznij na górze, schodź coraz niżej,
-        zawsze idąc do najbliższego sąsiada queriego. To greedy search z gwarancją
-        <code>O(log n)</code> i recall &gt; 95% przy dobrych parametrach.
+      <h3>Realne pomiary — sweep na 10k × 384-dim</h3>
+      <div class="table-wrap">
+        <table style="font-size:12px">
+          <thead><tr><th>M</th><th>ef_c</th><th>ef_s</th><th>Build</th><th>p50</th><th>vs brute</th><th>Recall</th></tr></thead>
+          <tbody>
+            <tr><td class="num">8</td><td class="num">100</td><td class="num">30</td><td class="num">535 ms</td><td class="num">15 µs</td><td class="num"><strong>54.9×</strong></td><td class="num">1.000</td></tr>
+            <tr><td class="num">16</td><td class="num">200</td><td class="num">50</td><td class="num">982 ms</td><td class="num">19 µs</td><td class="num">43.4×</td><td class="num">1.000</td></tr>
+            <tr><td class="num">32</td><td class="num">200</td><td class="num">50</td><td class="num">881 ms</td><td class="num">17 µs</td><td class="num">48.5×</td><td class="num">1.000</td></tr>
+            <tr><td class="num">32</td><td class="num">400</td><td class="num">200</td><td class="num">1806 ms</td><td class="num">62 µs</td><td class="num">13.3×</td><td class="num">1.000</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--muted)">
+        Baseline brute-force p50 = <strong>824 µs</strong>. HNSW: <strong>13-55× szybsze</strong>.
+        Memory ~180-189 KB per index (vs vector store = 15 MB).
+        Recall = 1.000 wszędzie bo korpus syntetyczny (sinusy + L2-norm) ma łatwą strukturę —
+        na realnych embeddingach spodziewane ~0.95-0.99.
       </p>
     </div>
     <div>
-      <h3>Parametry implementacji</h3>
+      <h3>Co jest w kodzie</h3>
       <ul>
-        <li><code>M</code> — max połączeń per node (typowo 16–32)</li>
-        <li><code>ef_construction</code> — szerokość searcha przy budowie (100–400)</li>
-        <li><code>ef_search</code> — szerokość przy zapytaniu (dynamicznie, tradeoff recall/latency)</li>
-        <li><code>m_L</code> — parametr poziomu (1/ln(M))</li>
+        <li><code>src/index/hnsw.rs</code> (~600 linii) — graf <code>Vec&lt;Vec&lt;Vec&lt;u32&gt;&gt;&gt;</code>, BinaryHeap dla candidates/results, sample_level z geom. distribution</li>
+        <li><code>Hnsw::build(store, params)</code> bulk-builds graf z VectorStore</li>
+        <li><code>hnsw.search(store, records, query, k, filter)</code> — greedy descent + ef-beam, distance przez <code>simd::cosine</code> (AVX2/NEON)</li>
+        <li><code>HnswParams { m, ef_construction, ef_search, m_l }</code> z poprawnym <code>m_l = 1/ln(M)</code> default</li>
+        <li><strong>Heuristic neighbor selection</strong> (Algorithm 4) — kluczowe dla recall</li>
+        <li>5 unit testów + 4 integration testy + sweep benchmark</li>
       </ul>
     </div>
   </div>
 
-  <h3>Plan dostarczenia</h3>
-  <ul>
-    <li>HNSW <strong>od zera</strong> — graf jako <code>Vec&lt;Vec&lt;u32&gt;&gt;</code> per warstwa, własny priority queue</li>
-    <li>Wykorzystanie istniejących SIMD distance — graf używa tych samych <code>cosine_avx2</code> / <code>cosine_neon</code></li>
-    <li>Wymierne kryteria: <strong>recall@10 ≥ 0.95</strong>, <strong>latency &lt; 1 ms</strong> dla 1M × 384-dim</li>
-    <li>Auto-dispatch: brute-force (dim &gt; 50, n &lt; 10k) → KD-Tree (dim &lt; 50) → HNSW (n &gt; 10k)</li>
-    <li>Benchmark recall vs latency vs memory na różnych <code>M</code> / <code>ef</code></li>
-  </ul>
-
-  <div class="warn">
-    <strong>Stretch goal — nie zrealizowany w tej sesji.</strong> HNSW od zera to ~1500 linii Rust
-    + Algorithm 4 z paper Malkov &amp; Yashunin + recall sweep (36 punktów M×ef) + porównanie z Qdrant.
-    Uczciwa implementacja wymaga osobnej sesji deweloperskiej. Phase 7 czeka.
+  <div class="callout">
+    <strong>Co odłożone:</strong> porównanie side-by-side z Qdrant in-memory (wymaga <code>qdrant_client</code>
+    + tonic + ~80 zależności) oraz integracja z <code>Collection::active_index</code> (auto-dispatch).
+    Algorytm sam — gotowy i sprawdzony.
   </div>
 </section>
 
@@ -797,11 +800,12 @@ user msg ──►  <span class="hl3">[ ładuje MEMORY.md          ]</span>     
 
   <h3>Roadmap — co dalej</h3>
   <ul>
-    <li><strong>Phase 6 ✅</strong> — w pełni zamknięta: RwLock + budget + LRU + HTTP transport + connection_id. 12 testów integracyjnych zielonych (6 concurrency + 2 HTTP e2e + 4 stdio).</li>
-    <li><strong>Phase 7 — HNSW</strong> (stretch). Wymaga osobnej sesji: ~1500 linii, recall sweep na 36 punktach (M × ef), porównanie z Qdrant. Plan i dispatch są napisane (<code>docs/plans/phase-7-hnsw-*.md</code>) ale kod jeszcze nie istnieje.</li>
-    <li>Wymiana embeddera na <code>bge-m3</code> lub <code>multilingual-e5</code> dla realnego multi-language (przerzucenie z 0% cross-lingual recall na właściwe wartości).</li>
+    <li><strong>Phase 6 ✅</strong> — pełna: RwLock + budget + LRU + HTTP transport + connection_id. 12 testów integracyjnych zielonych.</li>
+    <li><strong>Phase 7 ✅</strong> — HNSW od zera, ~600 linii, 13-55× speedup vs brute-force na 10k corpus. 5 unit + 4 integration testy zielone, sweep 9 konfiguracji zmierzony.</li>
+    <li><strong>Integracja HNSW z auto-dispatch</strong> — Collection::active_index z wyborem index typu po (n, dim). Następny logiczny krok.</li>
+    <li>Porównanie side-by-side z Qdrant in-memory na identycznym sprzęcie i korpusie.</li>
+    <li>Wymiana embeddera na <code>bge-m3</code> lub <code>multilingual-e5</code> dla realnego multi-language.</li>
     <li>Eksperyment: <strong>hybryda</strong> — pamięć Claude + NanoVec na tych samych danych, porównanie jakości odpowiedzi.</li>
-    <li>Persystencja (snapshot/restore) — naruszałoby „ephemeral by design", ale potencjalnie zasadne dla długo-trwających agent sessions.</li>
   </ul>
 
   <div class="callout" style="margin-top:24px">

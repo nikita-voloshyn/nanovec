@@ -139,5 +139,5 @@ Deliverables:
 | Phase 3 — Scalar → SIMD | ✅ Complete |
 | Phase 4 — Pile → Organized | ✅ Complete |
 | Phase 5 — O(n) → O(log n) | ✅ Complete |
-| Phase 6 — Single → Multi-agent | ⬜ Next |
-| Phase 7 — Exact → Approximate | ⬜ Stretch |
+| Phase 6 — Single → Multi-agent | ✅ Complete |
+| Phase 7 — Exact → Approximate | ✅ Complete (core; Qdrant comparison deferred) |

@@ -1,4 +1,5 @@
 mod concurrency;
+mod hnsw_recall;
 mod http_e2e;
 mod mcp_collections;
 mod mcp_embedding;
